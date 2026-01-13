@@ -15,9 +15,9 @@ struct packet{
 typedef struct packet protopacket;
 
 
-uint8_t compute_parity(uint8_t *data, int len);
+static uint8_t compute_parity(uint8_t *data, int len);
 
-inline uint8_t compute_parity(uint8_t *data, int len){
+static inline uint8_t compute_parity(uint8_t *data, int len){
     uint8_t p = 0;
     for(int i = 0; i<len; i++){p ^= data[i];}
     return p;

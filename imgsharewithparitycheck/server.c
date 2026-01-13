@@ -21,17 +21,17 @@ int main(void){
     // why this step here though it is for kernel to make it 
     // whatever there is
     recvside.sin_addr.s_addr = INADDR_ANY;
-    bind(recieversocketudp,(struct sockaddr*)&recvside, sizeof(recvside));
-    /*if (!&bind) {
+    //bind(recieversocketudp,(struct sockaddr*)&recvside, sizeof(recvside));
+/*if (!&bind) {
     perror("bind");
     return 1;
 }*/
-/*if (bind(recieversocketudp,
+if (bind(recieversocketudp,
          (struct sockaddr*)&recvside,
          sizeof(recvside)) < 0) {
     perror("bind");
     return 1;
-}*/
+}
 
 
     // how to open recieved file? this seems vague

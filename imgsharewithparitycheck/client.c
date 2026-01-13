@@ -33,7 +33,7 @@ int main(void){
     uint32_t seq = 0;
     while(1){
         int n = fread(buffer, 1, DATA_SIZE, fp);
-        if(/EOF/ n==0){break;}
+        if(/*EOF*/ n==0){break;}
         /*else{
             // not necessary block
         }*/
