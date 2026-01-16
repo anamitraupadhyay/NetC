@@ -20,38 +20,28 @@
 
 // copied probe match template
 const char *PROBE_MATCH_TEMPLATE = 
-    "<? xml version=\"1.0\" encoding=\"UTF-8\"?>"
-    "<s:Envelope "
-        "xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
-        "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
-        "xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" "  // NO SPACE! 
-        "xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\">"        // NO SPACE!
-    "<s:Header>"
-        "<a:Action s:mustUnderstand=\"1\">"
-            "http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches"
-        "</a:Action>"
-        "<a:MessageID>urn:uuid:%08x-%04x-%04x-%04x-%08x%04x</a:MessageID>"  // NO SPACE!
-        "<a:RelatesTo>%s</a:RelatesTo>"
-        "<a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a: To>"
-    "</s:Header>"
-    "<s:Body>"
-        "<d:ProbeMatches>"     // NO SPACE!
-            "<d:ProbeMatch>"
-                "<a:EndpointReference>"    // NO SPACE!
-                    "<a:Address>urn:uuid: fakecam-0001</a:Address>"  // NO SPACE!
-                "</a:EndpointReference>"
-                "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
-                "<d:Scopes>"
-                    "onvif://www.onvif.org/name/%s "
-                    "onvif://www.onvif.org/hardware/FakeCam "
-                    "onvif://www.onvif.org/type/video_encoder"
-                "</d:Scopes>"
-                "<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
-                "<d:MetadataVersion>1</d:MetadataVersion>"
-            "</d:ProbeMatch>"
-        "</d:ProbeMatches>"
-    "</s:Body>"
-    "</s:Envelope>";
+"<? xml version=\"1.0\" encoding=\"UTF-8\"?>"
+"<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\">"
+"<s:Header>"
+"<a: Action s:mustUnderstand=\"1\">http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</a:Action>"
+"<a:MessageID>urn: uuid:%08x-%04x-%04x-%04x-%08x%04x</a:MessageID>"
+"<a:RelatesTo>%s</a:RelatesTo>"
+"<a: To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a: To>"
+"</s:Header>"
+"<s:Body>"
+"<d:ProbeMatches>"
+"<d:ProbeMatch>"
+"<a: EndpointReference>"
+"<a:Address>urn:uuid: fakecam-0001</a:Address>"
+"</a: EndpointReference>"
+"<d:Types>dn:NetworkVideoTransmitter</d:Types>"
+"<d:Scopes>onvif://www.onvif.org/name/%s onvif://www.onvif.org/hardware/FakeCam onvif://www.onvif.org/type/video_encoder</d:Scopes>"
+"<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
+"<d:MetadataVersion>1</d:MetadataVersion>"
+"</d:ProbeMatch>"
+"</d: ProbeMatches>"
+"</s:Body>"
+"</s:Envelope>";
 
 // from close observation there are 5 fields to be extracted
 // 1. is it probe or discovery or not
