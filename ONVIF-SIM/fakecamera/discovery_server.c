@@ -20,32 +20,36 @@
 
 // copied probe match template
 const char *PROBE_MATCH_TEMPLATE = 
-    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-    "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
-               "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
-               "xmlns: d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\">"
+    "<? xml version=\"1.0\" encoding=\"UTF-8\"?>"
+    "<s:Envelope "
+        "xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+        "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
+        "xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" "  // NO SPACE! 
+        "xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\">"        // NO SPACE!
     "<s:Header>"
-    "<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</a:Action>"
-    "<a:MessageID>urn:uuid:%08x-%04x-%04x-%04x-%08x%04x</a:MessageID>"
-    "<a:RelatesTo>%s</a:RelatesTo>"
-    "<a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:To>"
+        "<a:Action s:mustUnderstand=\"1\">"
+            "http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches"
+        "</a:Action>"
+        "<a:MessageID>urn:uuid:%08x-%04x-%04x-%04x-%08x%04x</a:MessageID>"  // NO SPACE!
+        "<a:RelatesTo>%s</a:RelatesTo>"
+        "<a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a: To>"
     "</s:Header>"
     "<s:Body>"
-    "<d: ProbeMatches>"
-    "<d:ProbeMatch>"
-    "<a:EndpointReference>"
-    "<a:Address>urn:uuid: fakecam-0001</a:Address>"
-    "</a:EndpointReference>"
-    "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
-    "<d: Scopes>"
-    "onvif://www.onvif.org/name/%s "
-    "onvif://www.onvif.org/hardware/FakeCam "
-    "onvif://www.onvif.org/type/video_encoder"
-    "</d:Scopes>"
-    "<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
-    "<d:MetadataVersion>1</d:MetadataVersion>"
-    "</d:ProbeMatch>"
-    "</d:ProbeMatches>"
+        "<d:ProbeMatches>"     // NO SPACE!
+            "<d:ProbeMatch>"
+                "<a:EndpointReference>"    // NO SPACE!
+                    "<a:Address>urn:uuid: fakecam-0001</a:Address>"  // NO SPACE!
+                "</a:EndpointReference>"
+                "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
+                "<d:Scopes>"
+                    "onvif://www.onvif.org/name/%s "
+                    "onvif://www.onvif.org/hardware/FakeCam "
+                    "onvif://www.onvif.org/type/video_encoder"
+                "</d:Scopes>"
+                "<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
+                "<d:MetadataVersion>1</d:MetadataVersion>"
+            "</d:ProbeMatch>"
+        "</d:ProbeMatches>"
     "</s:Body>"
     "</s:Envelope>";
 
@@ -67,27 +71,42 @@ bool isprobe(const char *msg) {
 // copy pasted :(
 void getmessageid(const char *msg, char *out, size_t outsize);
 void getmessageid(const char *msg, char *out, size_t out_size) {
-    /* Looking for <a:MessageID> or <MessageID> */
-    const char *start = strstr(msg, "MessageID>");
+    // Look for <wsa:MessageID> first (most common)
+    const char *start = strstr(msg, "<wsa:MessageID");
+    if (!start) {
+        // Try without namespace prefix
+        start = strstr(msg, "<MessageID");
+    }
     if (!start) {
         out[0] = '\0';
         return;
     }
+    
+    // Find the > after opening tag
     start = strchr(start, '>');
     if (!start) {
         out[0] = '\0';
         return;
     }
-    start++;  /* Skipping '>' */
-    const char *end = strchr(start, '<');
+    start++;  // Skip >
+    
+    // Find closing tag
+    const char *end = strstr(start, "</");
     if (!end) {
         out[0] = '\0';
         return;
     }
+    
     size_t len = (size_t)(end - start);
     if (len >= out_size) len = out_size - 1;
+    
     memcpy(out, start, len);
     out[len] = '\0';
+    
+    // Trim whitespace
+    while (len > 0 && (out[len-1] == ' ' || out[len-1] == '\n' || out[len-1] == '\r')) {
+        out[--len] = '\0';
+    }
 }
 
 void getlocalip(char *buf, size_t size){
