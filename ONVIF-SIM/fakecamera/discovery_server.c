@@ -1,3 +1,7 @@
+/* Enable BSD and POSIX extensions for ip_mreq */
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdatomic.h>
@@ -18,28 +22,29 @@
 #define BUFFER_SIZE         65536
 
 
-// copied probe match template
+// ONVIF-compliant WS-Discovery ProbeMatch response template
+// Fixed: removed spaces in XML tags (e.g., "<? xml" → "<?xml", "<a: Action" → "<a:Action")
 const char *PROBE_MATCH_TEMPLATE = 
-"<? xml version=\"1.0\" encoding=\"UTF-8\"?>"
+"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
 "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\">"
 "<s:Header>"
-"<a: Action s:mustUnderstand=\"1\">http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</a:Action>"
-"<a:MessageID>urn: uuid:%08x-%04x-%04x-%04x-%08x%04x</a:MessageID>"
+"<a:Action s:mustUnderstand=\"1\">http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</a:Action>"
+"<a:MessageID>urn:uuid:%08x-%04x-%04x-%04x-%08x%04x</a:MessageID>"
 "<a:RelatesTo>%s</a:RelatesTo>"
-"<a: To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a: To>"
+"<a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:To>"
 "</s:Header>"
 "<s:Body>"
 "<d:ProbeMatches>"
 "<d:ProbeMatch>"
-"<a: EndpointReference>"
-"<a:Address>urn:uuid: fakecam-0001</a:Address>"
-"</a: EndpointReference>"
+"<a:EndpointReference>"
+"<a:Address>urn:uuid:fakecam-0001</a:Address>"
+"</a:EndpointReference>"
 "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
 "<d:Scopes>onvif://www.onvif.org/name/%s onvif://www.onvif.org/hardware/FakeCam onvif://www.onvif.org/type/video_encoder</d:Scopes>"
 "<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
 "<d:MetadataVersion>1</d:MetadataVersion>"
 "</d:ProbeMatch>"
-"</d: ProbeMatches>"
+"</d:ProbeMatches>"
 "</s:Body>"
 "</s:Envelope>";
 
