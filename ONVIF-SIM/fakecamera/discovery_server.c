@@ -9,11 +9,12 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <time.h>
+#include <fcntl.h>
 
 
 #define DISCOVERY_PORT      3702
 #define MULTICAST_ADDR      "239.255.255.250"
-#define CAMERA_NAME         "MyFakeCamera"
+//#define CAMERA_NAME         "MyFakeCamera"
 #define CAMERA_HTTP_PORT    8080
 #define BUFFER_SIZE         65536
 
@@ -24,7 +25,7 @@ const char *PROBE_MATCH_TEMPLATE =
 "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\">"
 "<s:Header>"
 "<a:Action s:mustUnderstand=\"1\">http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</a:Action>"
-"<a:MessageID>urn:uuid:%08x-%04x-%04x-%04x-%08x%04x</a:MessageID>"
+"<a:MessageID>%s</a:MessageID>" 
 "<a:RelatesTo>%s</a:RelatesTo>"
 "<a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:To>"
 "</s:Header>"
@@ -52,7 +53,7 @@ const char *PROBE_MATCH_TEMPLATE =
 bool isprobe(const char *msg);
 bool isprobe(const char *msg) {
     //does it contain Probe and discovery
-    if (strstr(msg, "Probe") && strstr(msg, "discovery")) {
+    if (strstr(msg, "Probe") && strstr(msg, "http://schemas.xmlsoap.org/ws/2005/04/discovery")) {
         return true;
     }
     return false;
@@ -126,19 +127,57 @@ void getlocalip(char *buf, size_t size){
     close(sockfd);
 }
 
+void generate_uuid(char *buf, size_t size){
+    memset(buf, 0, size);
+    // for 1st part
+    uint8_t first[16] = {0};
+    int fd = open("/dev/urandom",O_RDONLY);
+    if(fd>=0){
+        ssize_t  readbuf= read(fd, first, sizeof(first)/*16*/); close(readbuf);
+    }
+    else{perror("open");}
+    // for the 2nd part
+    // 2 parts 1st 6 and then 8
+    // Set standard UUID bits (Version 4)
+    first[6] = (first[6] & 0x0f) | 0x40; // Version 4
+    first[8] = (first[8] & 0x3f) | 0x80; // Variant 1
 
-int build_response(const char *message_id, const char *local_ip,
-                    char *buf, size_t size);
-/* Build response copypasted*/
-int build_response(const char *message_id, const char *local_ip,
-                   char *buf, size_t size) {
-    return snprintf(buf, size, PROBE_MATCH_TEMPLATE,
-        (uint32_t)rand(), (uint32_t)rand() & 0xFFFF,
-        (uint32_t)rand() & 0xFFFF, (uint32_t)rand() & 0xFFFF,
-        (uint32_t)rand(), (uint32_t)rand() & 0xFFFF,
-        message_id,
-        CAMERA_NAME,
-        local_ip, CAMERA_HTTP_PORT);
+    // 4. Format string directly into the output buffer
+    // Structure is 8-4-4-4-12 hex digits
+    snprintf(buf, size, 
+        "urn:uuid:%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+        first[0], first[1], first[2], first[3],
+        first[4], first[5],
+        first[6], first[7],
+        first[8], first[9],
+        first[10], first[11], first[12], first[13], first[14], first[15]
+    );
+}
+
+
+int build_response(const char *message_id, const char * relates_to_id,const char *local_ip,
+                    char *buf, size_t size, char *device_name);
+/* Build response copypasted not anymore*/
+int build_response(const char *message_id ,const char *relates_to_id, const char *local_ip,
+                   char *buf, size_t size, char *device_name) {
+  
+  int len = snprintf(
+      buf, size, PROBE_MATCH_TEMPLATE,
+      message_id,  // 1. <a:MessageID> (UUID)
+      relates_to_id,   // 2. <a:RelatesTo> (The ID from the request)
+      device_name,     // 3. Device Name
+      local_ip,        // 4. IP Address
+      CAMERA_HTTP_PORT // 5. Port
+  );
+  return len;
+}
+
+void getdevicename(char *device_name, uint8_t buffersize){
+    memset(device_name, 0, buffersize);
+
+    if (gethostname(device_name, sizeof(buffersize /*device_name*/)) != 0) {
+        perror("gethostname");
+    }
 }
 
 // Disclaimer printf stmts are added by llm
@@ -152,6 +191,12 @@ int main(void){
     char local_ip[64];
     getlocalip(local_ip, sizeof(local_ip));
     printf("Local IP: %s\n", local_ip);
+
+    // Getting device name
+    char device_name[64];
+    getdevicename(device_name, 64);
+    printf("device %s", device_name);
+
     
     // always on udp server
     // setupped with port
@@ -203,6 +248,12 @@ int main(void){
     // setting up buffers
     char recv_buf[BUFFER_SIZE];
     char send_buf[BUFFER_SIZE];
+
+    // GET message id that is for relates to id
+    char relates_to_id[256];
+
+    char message_id[46];//urn:uuid(9)+36chars(uuid)+1\0
+    
     //to represent client side and gonna iterate over
     struct sockaddr_in client_addr;
     socklen_t client_len;
@@ -217,6 +268,14 @@ int main(void){
         
         if (n <= 0) continue;
         recv_buf[n] = '\0';
+
+        getmessageid(recv_buf, relates_to_id, sizeof(relates_to_id));
+
+        // these 2 up and down function calls should
+        // be inside here for each m=usnique message parse
+
+        generate_uuid(message_id, 46);
+
         
         // Check if it's a probe with error handling
         // will enhance the error handling later
@@ -230,13 +289,10 @@ int main(void){
         char client_ip[64];
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
         printf("[Probe #%d] from %s\n", probe_count, client_ip);
-        
-        // GET message id
-        char message_id[256];
-        getmessageid(recv_buf, message_id, sizeof(message_id));
+
         
         // build response and send back
-        int send_len = build_response(message_id, local_ip, send_buf, sizeof(send_buf));
+        int send_len = build_response(message_id, relates_to_id, local_ip, send_buf, sizeof(send_buf), device_name);
         
         // Send back 
         ssize_t sent = sendto(recieversocketudp, send_buf, (size_t)send_len, 0,
