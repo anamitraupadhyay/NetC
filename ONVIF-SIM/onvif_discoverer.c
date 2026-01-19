@@ -320,6 +320,10 @@ const char *PROBE_MESSAGE =
 /*
  * Generate a simple UUID (not cryptographically secure, but sufficient for discovery)
  * Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+ * 
+ * NOTE: Uses rand() which is NOT cryptographically secure.
+ * For production: use proper UUID library (libuuid) or read from /dev/urandom
+ * For educational/testing purposes: rand() is sufficient
  */
 void generate_uuid(char *uuid_buf, size_t size) {
     snprintf(uuid_buf, size,
@@ -345,6 +349,9 @@ int extract_xaddrs(const char *xml, char *xaddrs, size_t size) {
     const char *end = strstr(start, "</");
     if (!end) return -1;
     
+    /* Validate bounds to prevent integer overflow */
+    if (end <= start) return -1;
+    
     size_t len = (size_t)(end - start);
     if (len >= size) len = size - 1;
     
@@ -368,7 +375,9 @@ int extract_device_name(const char *xml, char *name, size_t size) {
     name_marker += strlen("onvif://www.onvif.org/name/");
     
     size_t i;
-    for (i = 0; i < size - 1 && name_marker[i] != ' ' && name_marker[i] != '<'; i++) {
+    /* Add null terminator check to prevent buffer overrun */
+    for (i = 0; i < size - 1 && name_marker[i] != '\0' && 
+         name_marker[i] != ' ' && name_marker[i] != '<'; i++) {
         name[i] = name_marker[i];
     }
     name[i] = '\0';

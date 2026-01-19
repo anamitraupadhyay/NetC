@@ -1,3 +1,7 @@
+/* Enable BSD and POSIX extensions for ip_mreq */
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdio.h>
