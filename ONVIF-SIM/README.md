@@ -9,6 +9,8 @@ This directory contains educational implementations of ONVIF WS-Discovery protoc
 
 These tools are designed for **systems programmers** who understand C, memory, and want to learn networking from the ground up—from application code through libc to kernel internals.
 
+> 🚀 **Want to build a complete ONVIF camera?** See [ROADMAP.md](ROADMAP.md) for a modular progression from discovery (current) to full streaming camera with authentication, HTTP/SOAP services, and RTSP/RTP streaming.
+
 ---
 
 ## Table of Contents
