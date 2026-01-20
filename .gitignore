@@ -7,3 +7,5 @@ build/
 *.so
 auth_example
 integration_example
+_codeql_detected_source_root
+_codeql_build_dir/
