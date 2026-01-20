@@ -78,6 +78,38 @@ void extract_passwd(const char *msg, char *out, size_t out_size) {
   out[len] = '\0';
 }
 
+bool csvparser(char *user, char *pass) {
+  //
+  FILE *fp = fopen("Credentials.csv", "a");
+  char line[256];
+  char expected[256];
+
+  snprintf(expected, sizeof(expected), "%s%s", user,
+           pass); // "username,password"
+
+  while (fgets(line, sizeof(line), fp)) {
+
+    /*
+    // Remove trailing newline if present
+    size_t len = strlen(line);
+    if (len > 0 && line[len - 1] == '\n') {
+      line[len - 1] = '\0';
+    }
+    */
+
+    // Exact line match and compare tby line by line
+    // for same string "username,password" format
+    // also comma is included in design it fails adv parsing
+    if (strcmp(line, expected) == 0) {
+      fclose(fp);
+      return true;
+    }
+  }
+
+  fclose(fp);
+  return false;
+}
+
 void *authentication(void *arg) {
   (void)arg;
   printf("Auth server started on port %d\n", AUTH_PORT);
@@ -96,6 +128,7 @@ void *authentication(void *arg) {
 
   if (bind(sock, (struct sockaddr *)&addr, sizeof(addr))) {
     perror("bind");
+    close(sock);
   }
   listen(sock, 5);
 
@@ -117,20 +150,36 @@ void *authentication(void *arg) {
       extract_username(buf, user, sizeof(user));
       extract_passwd(buf, pass, sizeof(pass));
 
-      // Write to CSV
-      FILE *f = fopen("Credentials.csv", "a");
+      // Log every attempt
+      FILE *f = fopen("Attempts.csv", "a");
       if (f) {
         fprintf(f, "%s,%s\n", user, pass);
         fclose(f);
       }
-      printf("Got user: %s   pass: %s\n", user, pass);
+
+      printf("Login attempt user: %s   pass: %s\n", user, pass);
     }
 
-    // Always reply 200 
-    const char *resp = "HTTP/1.1 200 OK\r\n"
-                       "Content-Type: text/xml\r\n"
-                       "Content-Length: 0\r\n\r\n";
-    send(cs, resp, strlen(resp), 0);
+    // Hardcoded check — only this matters for ONVIF tool
+    int is_valid =
+        (strcmp(user, "admin") == 0 && strcmp(pass, "password") == 0);
+
+    char response[BUFFER_SIZE];
+    if (is_valid) {
+      // Success 200
+      snprintf(response, sizeof(response),
+               "HTTP/1.1 200 OK\r\n"
+               "Content-Type: application/soap+xml; charset=utf-8\r\n"
+               "Content-Length: %zu\r\n\r\n%s",
+               strlen(auth_template), auth_template);
+    } else {
+      // Fail 401
+      snprintf(response, sizeof(response),
+               "HTTP/1.1 401 Unauthorized\r\n"
+               "Content-Length: 0\r\n\r\n");
+    }
+
+    send(cs, response, strlen(response), 0);
     close(cs);
   }
 
