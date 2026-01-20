@@ -65,6 +65,10 @@ void getmessageid(const char *msg, char *out, size_t out_size) {
     // Look for <wsa:MessageID> first (most common)
     const char *start = strstr(msg, "<wsa:MessageID");
     if (!start) {
+        // Try <a:MessageID> namespace (common in ONVIF tools)
+        start = strstr(msg, "<a:MessageID");
+    }
+    if (!start) {
         // Try without namespace prefix
         start = strstr(msg, "<MessageID");
     }
@@ -175,7 +179,7 @@ int build_response(const char *message_id ,const char *relates_to_id, const char
 void getdevicename(char *device_name, uint8_t buffersize){
     memset(device_name, 0, buffersize);
 
-    if (gethostname(device_name, sizeof(buffersize /*device_name*/)) != 0) {
+    if (gethostname(device_name, buffersize) != 0) {
         perror("gethostname");
     }
 }
