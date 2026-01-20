@@ -17,12 +17,29 @@ static int base64_encode(const unsigned char *input, int length,
     BUF_MEM *buffer_ptr;
     
     b64 = BIO_new(BIO_f_base64());
+    if (!b64) {
+        return -1;
+    }
+    
     bio = BIO_new(BIO_s_mem());
+    if (!bio) {
+        BIO_free(b64);
+        return -1;
+    }
+    
     bio = BIO_push(b64, bio);
     
     BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
-    BIO_write(bio, input, length);
-    BIO_flush(bio);
+    
+    if (BIO_write(bio, input, length) <= 0) {
+        BIO_free_all(bio);
+        return -1;
+    }
+    
+    if (BIO_flush(bio) <= 0) {
+        BIO_free_all(bio);
+        return -1;
+    }
     
     BIO_get_mem_ptr(bio, &buffer_ptr);
     
@@ -55,10 +72,21 @@ static void generate_nonce(unsigned char *nonce, size_t size) {
 /**
  * Get current UTC timestamp in ISO 8601 format
  */
-static void get_utc_timestamp(char *buffer, size_t size) {
+static int get_utc_timestamp(char *buffer, size_t size) {
     time_t now = time(NULL);
     struct tm *tm_info = gmtime(&now);
-    strftime(buffer, size, "%Y-%m-%dT%H:%M:%SZ", tm_info);
+    
+    /* Check if gmtime() failed */
+    if (!tm_info) {
+        return -1;
+    }
+    
+    /* Format the timestamp */
+    if (strftime(buffer, size, "%Y-%m-%dT%H:%M:%SZ", tm_info) == 0) {
+        return -1;
+    }
+    
+    return 0;
 }
 
 int generate_auth_header(const char *username, const char *password,
@@ -79,20 +107,30 @@ int generate_auth_header(const char *username, const char *password,
     
     /* Get timestamp */
     char created[32];
-    get_utc_timestamp(created, sizeof(created));
+    if (get_utc_timestamp(created, sizeof(created)) != 0) {
+        return -1;
+    }
+    
+    /* Validate input sizes to prevent buffer overflow */
+    size_t created_len = strlen(created);
+    size_t password_len = strlen(password);
+    size_t total_len = sizeof(nonce) + created_len + password_len;
+    
+    if (total_len > 256) {
+        /* Input too large for digest buffer */
+        return -1;
+    }
     
     /* Calculate password digest: Base64(SHA1(nonce + created + password)) */
     unsigned char digest_input[256];
-    int digest_len = 0;
+    size_t digest_len = 0;
     
     memcpy(digest_input + digest_len, nonce, sizeof(nonce));
     digest_len += sizeof(nonce);
     
-    int created_len = strlen(created);
     memcpy(digest_input + digest_len, created, created_len);
     digest_len += created_len;
     
-    int password_len = strlen(password);
     memcpy(digest_input + digest_len, password, password_len);
     digest_len += password_len;
     
