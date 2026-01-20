@@ -8,6 +8,9 @@
 #include <openssl/buffer.h>
 #include <openssl/rand.h>
 
+/* Maximum size for digest input buffer (nonce + timestamp + password) */
+#define DIGEST_BUFFER_SIZE 256
+
 /**
  * Base64 encode a buffer
  */
@@ -116,13 +119,13 @@ int generate_auth_header(const char *username, const char *password,
     size_t password_len = strlen(password);
     size_t total_len = sizeof(nonce) + created_len + password_len;
     
-    if (total_len > 256) {
+    if (total_len > DIGEST_BUFFER_SIZE) {
         /* Input too large for digest buffer */
         return -1;
     }
     
     /* Calculate password digest: Base64(SHA1(nonce + created + password)) */
-    unsigned char digest_input[256];
+    unsigned char digest_input[DIGEST_BUFFER_SIZE];
     size_t digest_len = 0;
     
     memcpy(digest_input + digest_len, nonce, sizeof(nonce));
