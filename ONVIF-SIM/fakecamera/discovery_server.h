@@ -133,7 +133,7 @@ void generate_uuid(char *buf, size_t size){
     uint8_t first[16] = {0};
     int fd = open("/dev/urandom",O_RDONLY);
     if(fd>=0){
-        ssize_t  readbuf= read(fd, first, sizeof(first)/*16*/); close(readbuf);
+        ssize_t  readbuf= read(fd, first, sizeof(first)/*16*/); close(fd);
     }
     else{perror("open");}
     // for the 2nd part
@@ -181,7 +181,7 @@ void getdevicename(char *device_name, uint8_t buffersize){
 }
 
 // Disclaimer printf stmts are added by llm
-int main(void){
+void *discovery(void *arg){
 
     printf("=== WS-Discovery Server ===\n");
     
@@ -203,7 +203,7 @@ int main(void){
     int recieversocketudp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (recieversocketudp<0) {
         perror("socket");
-        return -1;
+        return NULL;
     }
     printf("socket created\n");
     // explicitly mentioned
@@ -226,7 +226,7 @@ int main(void){
              (struct sockaddr*)&recvside,
              sizeof(recvside)) < 0) {
         perror("bind");
-        return -2;
+        return NULL;
     }
     
     printf("Bound to port %d\n", DISCOVERY_PORT);
@@ -239,7 +239,7 @@ int main(void){
     if (setsockopt(recieversocketudp, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
         perror("multicast join");
         close(recieversocketudp);
-        return -3;
+        return NULL;
     }
     printf("Joined multicast %s\n", MULTICAST_ADDR);
     
@@ -302,5 +302,5 @@ int main(void){
             printf("         Sent ProbeMatch (%zd bytes)\n", sent);
         }
     }
-    return 0;
+    return NULL;
 }
