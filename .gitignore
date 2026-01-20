@@ -2,3 +2,7 @@ build/
 .vscode/
 .cache/
 .idea/
+*.o
+*.a
+*.so
+auth_example
