@@ -65,7 +65,7 @@ void getmessageid(const char *msg, char *out, size_t out_size) {
     // Look for <wsa:MessageID> first (most common)
     const char *start = strstr(msg, "<wsa:MessageID");
     if (!start) {
-        // Try <a:MessageID> namespace (common in ONVIF tools)
+        // Also try <a:MessageID> (used by many ONVIF tools)
         start = strstr(msg, "<a:MessageID");
     }
     if (!start) {
@@ -179,6 +179,7 @@ int build_response(const char *message_id ,const char *relates_to_id, const char
 void getdevicename(char *device_name, uint8_t buffersize){
     memset(device_name, 0, buffersize);
 
+    // Fixed: was sizeof(buffersize) which is always 1, now using buffersize directly
     if (gethostname(device_name, buffersize) != 0) {
         perror("gethostname");
     }
