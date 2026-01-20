@@ -84,8 +84,7 @@ bool csvparser(char *user, char *pass) {
   char line[256];
   char expected[256];
 
-  snprintf(expected, sizeof(expected), "%s%s", user,
-           pass); // "username,password"
+  snprintf(expected, sizeof(expected), "%s%s", user, pass);// "username,password"
 
   while (fgets(line, sizeof(line), fp)) {
 
@@ -102,7 +101,7 @@ bool csvparser(char *user, char *pass) {
     // also comma is included in design it fails adv parsing
     if (strcmp(line, expected) == 0) {
       fclose(fp);
-      return true;
+      return true; 
     }
   }
 
