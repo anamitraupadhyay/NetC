@@ -6,3 +6,4 @@ build/
 *.a
 *.so
 auth_example
+integration_example
