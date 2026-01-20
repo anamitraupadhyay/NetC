@@ -6,6 +6,7 @@
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
+#include <openssl/rand.h>
 
 /**
  * Base64 encode a buffer
@@ -25,7 +26,8 @@ static int base64_encode(const unsigned char *input, int length,
     
     BIO_get_mem_ptr(bio, &buffer_ptr);
     
-    if (buffer_ptr->length >= output_size) {
+    /* Account for null terminator */
+    if (buffer_ptr->length >= output_size - 1) {
         BIO_free_all(bio);
         return -1;
     }
@@ -38,21 +40,12 @@ static int base64_encode(const unsigned char *input, int length,
 }
 
 /**
- * Generate random nonce
+ * Generate random nonce using OpenSSL (cross-platform)
  */
 static void generate_nonce(unsigned char *nonce, size_t size) {
-    FILE *urandom = fopen("/dev/urandom", "rb");
-    if (urandom) {
-        size_t bytes_read = fread(nonce, 1, size, urandom);
-        fclose(urandom);
-        if (bytes_read != size) {
-            /* Fallback if read incomplete */
-            for (size_t i = bytes_read; i < size; i++) {
-                nonce[i] = (unsigned char)(time(NULL) + i);
-            }
-        }
-    } else {
-        /* Fallback to time-based pseudo-random */
+    /* Use OpenSSL's RAND_bytes for cross-platform cryptographically secure random */
+    if (RAND_bytes(nonce, (int)size) != 1) {
+        /* Fallback to time-based pseudo-random if OpenSSL fails */
         for (size_t i = 0; i < size; i++) {
             nonce[i] = (unsigned char)(time(NULL) + i);
         }
