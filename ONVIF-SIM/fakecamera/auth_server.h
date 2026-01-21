@@ -25,11 +25,11 @@ const char *auth_template =
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
     "<s:Body>"
     "<tds:GetDeviceInformationResponse>"
-    "<tds: Manufacturer>Videonetics</tds:Manufacturer>"
+    "<tds:Manufacturer>Videonetics</tds:Manufacturer>"
     "<tds:Model>Videonetics_Camera_Emulator</tds:Model>"
     "<tds:FirmwareVersion>10.0</tds:FirmwareVersion>"
     "<tds:SerialNumber>1</tds:SerialNumber>"
-    "<tds:HardwareId>1. 0</tds:HardwareId>"
+    "<tds:HardwareId>1.0</tds:HardwareId>"
     "</tds:GetDeviceInformationResponse>"
     "</s:Body>"
     "</s:Envelope>";
@@ -138,6 +138,8 @@ void *authentication(void *arg) {
   char pass[MAX_CREDENTIALS] = {0};
 
   while (1) {
+    FILE *xml = fopen("auth.xml", "w");
+    fprintf(xml, "%s", auth_template);fclose(xml);
     struct sockaddr_in cl;
     socklen_t clen = sizeof(cl);
     int cs = accept(sock, (struct sockaddr *)&cl, &clen);

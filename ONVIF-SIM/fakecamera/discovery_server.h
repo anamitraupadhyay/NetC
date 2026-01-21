@@ -194,29 +194,31 @@ void getdevicename(char *device_name, uint8_t buffersize){
 }
 
 // Disclaimer printf stmts are added by llm
-void *discovery(void *arg){
+void *discovery(void *arg) {
 
-    printf("=== WS-Discovery Server ===\n");
-    
-    srand((unsigned)time(NULL));
-    
-    // Geting local IP
-    char local_ip[64];
-    getlocalip(local_ip, sizeof(local_ip));
-    printf("Local IP: %s\n", local_ip);
+  FILE *xml = fopen("dis.xml", "w");
+  fprintf(xml, "%s", PROBE_MATCH_TEMPLATE);fclose(xml);
 
-    // Getting device name
-    char device_name[64] = CAMERA_NAME;
-    //getdevicename(device_name, 64);
-    printf("device %s", device_name);
+  printf("=== WS-Discovery Server ===\n");
 
-    
-    // always on udp server
-    // setupped with port
-    int recieversocketudp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (recieversocketudp<0) {
-        perror("socket");
-        return NULL;
+  srand((unsigned)time(NULL));
+
+  // Geting local IP
+  char local_ip[64];
+  getlocalip(local_ip, sizeof(local_ip));
+  printf("Local IP: %s\n", local_ip);
+
+  // Getting device name
+  char device_name[64] = CAMERA_NAME;
+  // getdevicename(device_name, 64);
+  printf("device %s", device_name);
+
+  // always on udp server
+  // setupped with port
+  int recieversocketudp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (recieversocketudp < 0) {
+    perror("socket");
+    return NULL;
     }
     printf("socket created\n");
     // explicitly mentioned
