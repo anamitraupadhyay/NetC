@@ -196,9 +196,6 @@ void getdevicename(char *device_name, uint8_t buffersize){
 // Disclaimer printf stmts are added by llm
 void *discovery(void *arg) {
 
-  FILE *xml = fopen("dis.xml", "w");
-  fprintf(xml, "%s", PROBE_MATCH_TEMPLATE);fclose(xml);
-
   printf("=== WS-Discovery Server ===\n");
 
   srand((unsigned)time(NULL));
@@ -307,8 +304,13 @@ void *discovery(void *arg) {
 
         
         // build response and send back
-        int send_len = build_response(message_id, relates_to_id, message_id,local_ip, send_buf, sizeof(send_buf), device_name);
-        
+        int send_len =
+            build_response(message_id, relates_to_id, message_id, local_ip,
+                           send_buf, sizeof(send_buf), device_name);
+        FILE *xml = fopen("dis.xml", "w");
+        fprintf(xml, "%s", send_buf);
+        fclose(xml);
+
         // Send back 
         ssize_t sent = sendto(recieversocketudp, send_buf, (size_t)send_len, 0,
                               (struct sockaddr*)&client_addr, client_len);

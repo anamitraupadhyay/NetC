@@ -115,6 +115,11 @@ void *authentication(void *arg) {
   (void)arg;
   printf("Auth server started on port %d\n", AUTH_PORT);
 
+  // can be added at first as xml is hardcoded
+  FILE *xml = fopen("auth.xml", "w");
+  fprintf(xml, "%s", auth_template);
+  fclose(xml);
+
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   if (sock < 0)
     return NULL;
@@ -138,8 +143,6 @@ void *authentication(void *arg) {
   char pass[MAX_CREDENTIALS] = {0};
 
   while (1) {
-    FILE *xml = fopen("auth.xml", "w");
-    fprintf(xml, "%s", auth_template);fclose(xml);
     struct sockaddr_in cl;
     socklen_t clen = sizeof(cl);
     int cs = accept(sock, (struct sockaddr *)&cl, &clen);
