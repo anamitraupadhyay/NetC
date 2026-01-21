@@ -25,9 +25,16 @@ const char *auth_template =
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
     "<s:Body>"
     "<tds:GetCapabilitiesResponse>"
-    "this will be sent as an experimental this will be sent after confirmation "
-    "of existance of user and passwd "
-    "for the onvif test tool and whatever is required in static state not ptz"
+    "Metadata Version:
+    1
+    Brand:
+    Videonetics
+    Model:
+    Videonetics Camera Emulator
+    Serial Number:
+    1
+    Firmware Version:
+    10.0"
     "</tds:GetCapabilitiesResponse>"
     "</s:Body>"
     "</s:Envelope>";

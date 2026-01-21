@@ -14,7 +14,7 @@
 
 #define DISCOVERY_PORT      3702
 #define MULTICAST_ADDR      "239.255.255.250"
-//#define CAMERA_NAME         "MyFakeCamera"
+#define CAMERA_NAME         "Videnetics_camera_emulator"
 #define CAMERA_HTTP_PORT    8080
 #define BUFFER_SIZE         65536
 
@@ -33,10 +33,11 @@ const char *PROBE_MATCH_TEMPLATE =
 "<d:ProbeMatches>"
 "<d:ProbeMatch>"
 "<a:EndpointReference>"
-"<a:Address>urn:uuid:fakecam-0001</a:Address>"
+//"<a:Address>urn:uuid:fakecam-0001</a:Address>"
+"<a:Address>urn:uuid:%s</a:Address>"
 "</a:EndpointReference>"
 "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
-"<d:Scopes>onvif://www.onvif.org/name/%s onvif://www.onvif.org/hardware/FakeCam onvif://www.onvif.org/type/video_encoder</d:Scopes>"
+"<d:Scopes>onvif://www.onvif.org/type/Emulator onvif://www.onvif.org/name/VideoneticsCamera Emulator onvif://www.onvif.org/TotalCameraCount/7 onvif://www.onvif.org/hardware/Video Management System onvif://www.onvif.org/ocation/Any onvif://www.onvif.org/Profile/Streaming onvif://www.onvif.org/Profile/T onvif://www.onvif.org/Profile/G onvif://www.onvif.org/Profile/C onvif://www.onvif.org/Profile/A onvif://www.onvif.org/Profile/M</d:Scopes>"
 "<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
 "<d:MetadataVersion>1</d:MetadataVersion>"
 "</d:ProbeMatch>"
@@ -169,6 +170,7 @@ int build_response(const char *message_id ,const char *relates_to_id, const char
       buf, size, PROBE_MATCH_TEMPLATE,
       message_id,  // 1. <a:MessageID> (UUID)
       relates_to_id,   // 2. <a:RelatesTo> (The ID from the request)
+      message_id,
       device_name,     // 3. Device Name
       local_ip,        // 4. IP Address
       CAMERA_HTTP_PORT // 5. Port
@@ -179,7 +181,7 @@ int build_response(const char *message_id ,const char *relates_to_id, const char
 void getdevicename(char *device_name, uint8_t buffersize){
     memset(device_name, 0, buffersize);
 
-    if (gethostname(device_name, /*sizeof(*/buffersize /*device_name*/) != 0) {
+    if (gethostname(device_name, /*sizeof(*/ buffersize /*device_name*/) != 0) {
         perror("gethostname");
     }
 }
@@ -197,8 +199,8 @@ void *discovery(void *arg){
     printf("Local IP: %s\n", local_ip);
 
     // Getting device name
-    char device_name[64];
-    getdevicename(device_name, 64);
+    char device_name[64] = CAMERA_NAME;
+    //getdevicename(device_name, 64);
     printf("device %s", device_name);
 
     
