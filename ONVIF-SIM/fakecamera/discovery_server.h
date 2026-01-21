@@ -167,10 +167,10 @@ void generate_uuid(char *buf, size_t size){
 }
 
 
-int build_response(const char *message_id, const char * relates_to_id,const char *local_ip,
+int build_response(const char *message_id, const char * relates_to_id, const char *message_id1,const char *local_ip,
                     char *buf, size_t size, char *device_name);
 /* Build response copypasted not anymore*/
-int build_response(const char *message_id ,const char *relates_to_id, const char *local_ip,
+int build_response(const char *message_id ,const char *relates_to_id, const char *message_id1,const char *local_ip,
                    char *buf, size_t size, char *device_name) {
   
   int len = snprintf(
@@ -305,7 +305,7 @@ void *discovery(void *arg){
 
         
         // build response and send back
-        int send_len = build_response(message_id, relates_to_id, local_ip, send_buf, sizeof(send_buf), device_name);
+        int send_len = build_response(message_id, relates_to_id, message_id,local_ip, send_buf, sizeof(send_buf), device_name);
         
         // Send back 
         ssize_t sent = sendto(recieversocketudp, send_buf, (size_t)send_len, 0,
