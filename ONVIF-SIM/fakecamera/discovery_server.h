@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <asm-generic/socket.h>
 #include <netinet/in.h>
 #include <stdatomic.h>
 #include <stddef.h>
@@ -14,10 +15,12 @@
 
 #define DISCOVERY_PORT      3702
 #define MULTICAST_ADDR      "239.255.255.250"
-#define CAMERA_NAME         "Videnetics_camera_emulator"
+#define CAMERA_NAME         "Videonetics_Camera_Emulator"
 #define CAMERA_HTTP_PORT    8080
 #define BUFFER_SIZE         65536
 
+static char g_cached_xml[BUFFER_SIZE];
+static size_t g_cached_xml_len = 0;
 
 // copied probe match template
 const char *PROBE_MATCH_TEMPLATE =
@@ -43,7 +46,7 @@ const char *PROBE_MATCH_TEMPLATE =
     "</a:EndpointReference>"
     "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
     "<d:Scopes>onvif://www.onvif.org/name/%s "
-    "onvif://www.onvif.org/hardware/FakeCam "
+    "onvif://www.onvif.org/hardware/Videonetics_Camera_Emulator "
     "onvif://www.onvif.org/type/video_encoder</d:Scopes>"
     "<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
     "<d:MetadataVersion>1</d:MetadataVersion>"
@@ -193,12 +196,148 @@ void getdevicename(char *device_name, uint8_t buffersize){
     }
 }
 
+bool is_xml_empty(FILE *fp) {
+  int c = fgetc(fp);
+  if (c == EOF) {
+    return true;
+  } else {
+    ungetc(c, fp);
+    return false;
+  }
+}
+
+int parse_server_port(FILE *fp) {
+  // so find the "<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
+  // and go for the :%d part as it will be the port
+  char line[1024]; // offcourse enough 1024
+  int port = -1;
+
+  while (fgets(line, sizeof(line), fp)) {
+    char *xaddrs_start = strstr(line, "<d:XAddrs>");
+    if (xaddrs_start) {
+      // Find the colon before port number
+      // Pattern: http://x.x.x.x:PORT/
+      char *port_start = strstr(xaddrs_start, "://");
+      if (port_start) {
+        // Move past "://" and find the colon before port
+        port_start = strchr(port_start + 3, ':');
+        if (port_start) {// just using the same var to save space and to less complicate
+          port = atoi(port_start + 1); // +1 to skip ':'
+        }
+      }
+      break;
+    }
+  }
+
+  // Reset file pointer to beginning for later use
+  rewind(fp);
+  return port;
+}
+
+void load_preloaded_xml() {
+  FILE *fp = fopen("dis.xml", "r");
+  if (!fp)
+    perror("fopen load_preload_xml");
+  int server_port = parse_server_port(fp);
+
+  g_cached_xml_len = fread(g_cached_xml, 1, sizeof(g_cached_xml) - 1, fp);
+  g_cached_xml[g_cached_xml_len] = '\0';
+  fclose(fp);
+  printf("[Preload] Loaded %zu bytes, HTTP port: %d\n", g_cached_xml_len,
+         server_port);
+
+  // build_response(const char *message_id, const char *relates_to_id, const
+  // char *message_id1, const char *local_ip, char *buf, size_t size, char
+  // *device_name)
+  // 1 thing to clarify no need to build response =>
+  // yes as xml is prebuilt just send it just get the server port and take that
+  // into account
+  // after this what else needs to be taken in account like where is t change
+  // the server port in actual logic
+  // now the normal audited network flow
+  int recvsocketudp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  int opt1 = 1;
+  setsockopt(recvsocketudp, SOL_SOCKET, SO_REUSEADDR, &opt1, sizeof(&opt1));
+
+  struct sockaddr_in recvaddr;
+  memset(&recvaddr, 0, sizeof(recvaddr));
+  recvaddr.sin_family = AF_INET;
+  recvaddr.sin_port = htons(DISCOVERY_PORT);
+  recvaddr.sin_addr.s_addr = INADDR_ANY;
+
+  if (bind(recvsocketudp, (struct sockaddr *)&recvaddr, sizeof(recvaddr)) < 0) {
+    perror("bind");
+    close(recvsocketudp);
+    return;
+  }
+  printf("[Preload] Bound to port %d\n", DISCOVERY_PORT);
+
+  // 5. Join multicast
+  struct ip_mreq mreq;
+  mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
+  mreq.imr_interface.s_addr = INADDR_ANY;
+
+  if (setsockopt(recvsocketudp, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq,
+                 sizeof(mreq)) < 0) {
+    perror("multicast join");
+    close(recvsocketudp);
+    return;
+  }
+  printf("[Preload] Joined multicast %s\n", MULTICAST_ADDR);
+  printf("[Preload] Listening...  (FAST MODE)\n\n");
+
+  // 6. Main loop - recv and send cached XML directly
+  char recv_buf[BUFFER_SIZE];
+  struct sockaddr_in client_addr;
+  socklen_t client_len;
+  int probe_count = 0;
+
+  while (1) {
+    client_len = sizeof(client_addr);
+    memset(recv_buf, 0, sizeof(recv_buf));
+
+    ssize_t n = recvfrom(recvsocketudp, recv_buf, sizeof(recv_buf) - 1, 0,
+                         (struct sockaddr *)&client_addr, &client_len);
+
+    if (n <= 0)
+      continue;
+    recv_buf[n] = '\0';
+
+    if (!isprobe(recv_buf))
+      continue;
+
+    probe_count++;
+
+    char client_ip[64];
+    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+    printf("[Probe #%d] from %s\n", probe_count, client_ip);
+
+    // *** FAST:  Just send cached XML, no building!  ***
+    ssize_t sent = sendto(recvsocketudp, g_cached_xml, g_cached_xml_len, 0,
+                          (struct sockaddr *)&client_addr, client_len);
+
+    if (sent > 0) {
+      printf("         Sent ProbeMatch (%zd bytes) [CACHED]\n", sent);
+    }
+  }
+}
+
 // Disclaimer printf stmts are added by llm
 void *discovery(void *arg) {
 
   printf("=== WS-Discovery Server ===\n");
 
   srand((unsigned)time(NULL));
+
+  FILE *disxml = fopen("dis.xml", "r");
+  if (disxml) {
+    if (!is_xml_empty(disxml)) {
+      fclose(disxml);
+      load_preloaded_xml();
+      return NULL;
+    }
+    fclose(disxml);
+  }
 
   // Geting local IP
   char local_ip[64];
