@@ -19,97 +19,18 @@
 #define AUTH_PORT 8080
 #define MAX_CREDENTIALS 1024
 
-/* ONVIF GetCapabilitiesResponse template for ONVIF Test Tool compatibility */
 const char *auth_template =
-    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-    "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
-    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
-    "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
-    "<s:Body>"
-    "<tds:GetCapabilitiesResponse>"
-    "<tds:Capabilities>"
-    "<tt:Device>"
-    "<tt:XAddr>http://%s:%d/onvif/device_service</tt:XAddr>"
-    "<tt:Network><tt:IPFilter>false</tt:IPFilter></tt:Network>"
-    "<tt:System>"
-    "<tt:DiscoveryResolve>true</tt:DiscoveryResolve>"
-    "<tt:DiscoveryBye>true</tt:DiscoveryBye>"
-    "<tt:RemoteDiscovery>false</tt:RemoteDiscovery>"
-    "<tt:SystemBackup>false</tt:SystemBackup>"
-    "<tt:FirmwareUpgrade>false</tt:FirmwareUpgrade>"
-    "</tt:System>"
-    "</tt:Device>"
-    "<tt:Media><tt:XAddr>http://%s:%d/onvif/media_service</tt:XAddr>"
-    "<tt:StreamingCapabilities>"
-    "<tt:RTPMulticast>false</tt:RTPMulticast>"
-    "<tt:RTP_TCP>true</tt:RTP_TCP>"
-    "<tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP>"
-    "</tt:StreamingCapabilities>"
-    "</tt:Media>"
-    "</tds:Capabilities>"
-    "</tds:GetCapabilitiesResponse>"
-    "</s:Body>"
-    "</s:Envelope>";
-
-/* GetDeviceInformationResponse template for ONVIF Test Tool */
-const char *device_info_template =
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
     "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
     "<s:Body>"
-    "<tds:GetDeviceInformationResponse>"
-    "<tds:Manufacturer>Videonetics</tds:Manufacturer>"
-    "<tds:Model>Camera Emulator</tds:Model>"
+    "<tds:GetCapabilitiesResponse>"
+    "<tds:MetadataVersion>1</tds:MetadataVersion>"
+    "<tds:Brand>Videonetics</tds:Brand>"
+    "<tds:Model>Videonetics Camera Emulator</tds:Model>"
+    "<tds:SerialNumber>1</tds:SerialNumber>"
     "<tds:FirmwareVersion>10.0</tds:FirmwareVersion>"
-    "<tds:SerialNumber>VN-SIM-001</tds:SerialNumber>"
-    "<tds:HardwareId>VN-HW-001</tds:HardwareId>"
-    "</tds:GetDeviceInformationResponse>"
-    "</s:Body>"
-    "</s:Envelope>";
-
-/* GetProfilesResponse template for media service */  
-const char *profiles_template =
-    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-    "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
-    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" "
-    "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
-    "<s:Body>"
-    "<trt:GetProfilesResponse>"
-    "<trt:Profiles token=\"profile_1\" fixed=\"true\">"
-    "<tt:Name>MainStream</tt:Name>"
-    "<tt:VideoSourceConfiguration token=\"vsc_1\">"
-    "<tt:Name>VideoSource_1</tt:Name>"
-    "<tt:UseCount>1</tt:UseCount>"
-    "<tt:SourceToken>vs_1</tt:SourceToken>"
-    "<tt:Bounds x=\"0\" y=\"0\" width=\"1920\" height=\"1080\"/>"
-    "</tt:VideoSourceConfiguration>"
-    "<tt:VideoEncoderConfiguration token=\"vec_1\">"
-    "<tt:Name>H264_Encoder</tt:Name>"
-    "<tt:UseCount>1</tt:UseCount>"
-    "<tt:Encoding>H264</tt:Encoding>"
-    "<tt:Resolution><tt:Width>1920</tt:Width><tt:Height>1080</tt:Height></tt:Resolution>"
-    "<tt:RateControl><tt:FrameRateLimit>30</tt:FrameRateLimit><tt:BitrateLimit>4096</tt:BitrateLimit></tt:RateControl>"
-    "</tt:VideoEncoderConfiguration>"
-    "</trt:Profiles>"
-    "</trt:GetProfilesResponse>"
-    "</s:Body>"
-    "</s:Envelope>";
-
-/* GetStreamUriResponse template for RTSP streaming */
-const char *stream_uri_template =
-    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-    "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
-    "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" "
-    "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
-    "<s:Body>"
-    "<trt:GetStreamUriResponse>"
-    "<trt:MediaUri>"
-    "<tt:Uri>rtsp://%s:%d/stream1</tt:Uri>"
-    "<tt:InvalidAfterConnect>false</tt:InvalidAfterConnect>"
-    "<tt:InvalidAfterReboot>false</tt:InvalidAfterReboot>"
-    "<tt:Timeout>PT0S</tt:Timeout>"
-    "</trt:MediaUri>"
-    "</trt:GetStreamUriResponse>"
+    "</tds:GetCapabilitiesResponse>"
     "</s:Body>"
     "</s:Envelope>";
 
@@ -190,55 +111,9 @@ bool csvparser(char *user, char *pass) {
   return false;
 }
 
-/* Request type detection for ONVIF operations */
-typedef enum {
-  REQ_GET_CAPABILITIES,
-  REQ_GET_DEVICE_INFO,
-  REQ_GET_PROFILES,
-  REQ_GET_STREAM_URI,
-  REQ_UNKNOWN
-} onvif_request_type;
-
-onvif_request_type detect_request_type(const char *buf) {
-  if (strstr(buf, "GetCapabilities"))
-    return REQ_GET_CAPABILITIES;
-  if (strstr(buf, "GetDeviceInformation"))
-    return REQ_GET_DEVICE_INFO;
-  if (strstr(buf, "GetProfiles"))
-    return REQ_GET_PROFILES;
-  if (strstr(buf, "GetStreamUri"))
-    return REQ_GET_STREAM_URI;
-  return REQ_UNKNOWN;
-}
-
-/* Get local IP for response templates */
-void auth_getlocalip(char *buf, size_t size) {
-  int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  if (sockfd < 0) {
-    strncpy(buf, "127.0.0.1", size);
-    return;
-  }
-  struct sockaddr_in sockaddr;
-  memset(&sockaddr, 0, sizeof(sockaddr));
-  sockaddr.sin_port = htons(9000);
-  sockaddr.sin_family = AF_INET;
-  inet_pton(AF_INET, "8.8.8.8", &sockaddr.sin_addr);
-
-  if (connect(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0) {
-    close(sockfd);
-    strncpy(buf, "127.0.0.1", size);
-    return;
-  }
-  struct sockaddr_in name;
-  socklen_t namelen = sizeof(name);
-  getsockname(sockfd, (struct sockaddr *)&name, &namelen);
-  inet_ntop(AF_INET, &name.sin_addr, buf, size);
-  close(sockfd);
-}
-
 void *authentication(void *arg) {
   (void)arg;
-  printf("ONVIF Device Service started on port %d\n", AUTH_PORT);
+  printf("Auth server started on port %d\n", AUTH_PORT);
 
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   if (sock < 0)
@@ -255,16 +130,12 @@ void *authentication(void *arg) {
   if (bind(sock, (struct sockaddr *)&addr, sizeof(addr))) {
     perror("bind");
     close(sock);
-    return NULL;
   }
   listen(sock, 5);
 
   char buf[BUFFER_SIZE];
   char user[MAX_CREDENTIALS] = {0};
   char pass[MAX_CREDENTIALS] = {0};
-  char local_ip[64];
-  auth_getlocalip(local_ip, sizeof(local_ip));
-  printf("Local IP: %s\n", local_ip);
 
   while (1) {
     struct sockaddr_in cl;
@@ -287,55 +158,21 @@ void *authentication(void *arg) {
         fclose(f);
       }
 
-      if (user[0] != '\0')
-        printf("Login attempt user: %s   pass: %s\n", user, pass);
+      printf("Login attempt user: %s   pass: %s\n", user, pass);
     }
 
     // Hardcoded check — only this matters for ONVIF tool
     int is_valid =
-        (strcmp(user, "admin") == 0 && strcmp(pass, "password") == 0) ||
-        (user[0] == '\0'); // Allow unauthenticated for discovery
+        (strcmp(user, "admin") == 0 && strcmp(pass, "password") == 0);
 
     char response[BUFFER_SIZE];
-    char body[BUFFER_SIZE];
-
     if (is_valid) {
-      onvif_request_type req_type = detect_request_type(buf);
-      const char *response_body;
-
-      switch (req_type) {
-      case REQ_GET_CAPABILITIES:
-        snprintf(body, sizeof(body), auth_template, local_ip, AUTH_PORT,
-                 local_ip, AUTH_PORT);
-        response_body = body;
-        printf("  -> GetCapabilities response\n");
-        break;
-      case REQ_GET_DEVICE_INFO:
-        response_body = device_info_template;
-        printf("  -> GetDeviceInformation response\n");
-        break;
-      case REQ_GET_PROFILES:
-        response_body = profiles_template;
-        printf("  -> GetProfiles response\n");
-        break;
-      case REQ_GET_STREAM_URI:
-        snprintf(body, sizeof(body), stream_uri_template, local_ip, 554);
-        response_body = body;
-        printf("  -> GetStreamUri response\n");
-        break;
-      default:
-        snprintf(body, sizeof(body), auth_template, local_ip, AUTH_PORT,
-                 local_ip, AUTH_PORT);
-        response_body = body;
-        printf("  -> Default capabilities response\n");
-        break;
-      }
-
+      // Success 200
       snprintf(response, sizeof(response),
                "HTTP/1.1 200 OK\r\n"
                "Content-Type: application/soap+xml; charset=utf-8\r\n"
                "Content-Length: %zu\r\n\r\n%s",
-               strlen(response_body), response_body);
+               strlen(auth_template), auth_template);
     } else {
       // Fail 401
       snprintf(response, sizeof(response),
