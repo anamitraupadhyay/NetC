@@ -6,3 +6,14 @@ ONVIF-SIM/fakecamera/auth.h
 ONVIF-SIM/fakecamera/trial.c
 ONVIF-SIM/fakecamera/getcapabilities.xml
 ONVIF-SIM/fakecamera/main
+
+# CodeQL build artifacts
+_codeql_detected_source_root
+_codeql_build_dir/
+*/_codeql_build_dir/
+
+# Build objects
+*.o
+*.d
+*.a
+*.out

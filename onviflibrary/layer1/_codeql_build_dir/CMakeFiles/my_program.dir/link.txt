@@ -1,1 +1,0 @@
-/home/runner/work/NetC/.codeql-scratch/dbs/cpp/working/autobuild/bin/cc -O3 -DNDEBUG -rdynamic -Wl,--dependency-file=CMakeFiles/my_program.dir/link.d CMakeFiles/my_program.dir/clientudp.o CMakeFiles/my_program.dir/serverudp.o -o my_program  /usr/lib/x86_64-linux-gnu/libxml2.so
