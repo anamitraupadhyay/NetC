@@ -24,18 +24,13 @@ const char *auth_template =
     "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
     "<s:Body>"
-    "<tds:GetCapabilitiesResponse>"
-    "Metadata Version:
-    1
-    Brand:
-    Videonetics
-    Model:
-    Videonetics Camera Emulator
-    Serial Number:
-    1
-    Firmware Version:
-    10.0"
-    "</tds:GetCapabilitiesResponse>"
+    "<tds:GetDeviceInformationResponse>"
+    "<tds: Manufacturer>Videonetics</tds:Manufacturer>"
+    "<tds:Model>Videonetics_Camera_Emulator</tds:Model>"
+    "<tds:FirmwareVersion>10.0</tds:FirmwareVersion>"
+    "<tds:SerialNumber>1</tds:SerialNumber>"
+    "<tds:HardwareId>1. 0</tds:HardwareId>"
+    "</tds:GetDeviceInformationResponse>"
     "</s:Body>"
     "</s:Envelope>";
 
@@ -87,21 +82,21 @@ void extract_passwd(const char *msg, char *out, size_t out_size) {
 
 bool csvparser(char *user, char *pass) {
   //
-  FILE *fp = fopen("Credentials.csv", "a");
+  FILE *fp = fopen("Credentials.csv", "r");
+  if(!fp){return false;}
   char line[256];
   char expected[256];
 
-  snprintf(expected, sizeof(expected), "%s%s", user, pass);// "username,password"
+  snprintf(expected, sizeof(expected), "%s,%s", user, pass);// "username,password"
 
   while (fgets(line, sizeof(line), fp)) {
 
-    /*
+    
     // Remove trailing newline if present
     size_t len = strlen(line);
     if (len > 0 && line[len - 1] == '\n') {
       line[len - 1] = '\0';
     }
-    */
 
     // Exact line match and compare tby line by line
     // for same string "username,password" format
@@ -169,6 +164,11 @@ void *authentication(void *arg) {
     // Hardcoded check — only this matters for ONVIF tool
     int is_valid =
         (strcmp(user, "admin") == 0 && strcmp(pass, "password") == 0);
+
+    // If hardcoded fails, check CSV later this will be locked instead of above
+    if (!is_valid) {
+      is_valid = csvparser(user, pass);
+    }
 
     char response[BUFFER_SIZE];
     if (is_valid) {
