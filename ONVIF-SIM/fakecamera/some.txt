@@ -1,0 +1,56 @@
+{
+"server_ip": "172.16.4.9",
+"server_port": 8000,
+"scopes": [
+{
+"manufacturer": "VTPL",
+"model": "emulator"
+},
+scope
+]
+}
+
+
+device_setails_structure{
+char manufacturer[128];
+char model[128];
+}
+
+device_network_details{
+char server_ip[16];
+int server_port;
+}
+
+if file exits json read from there update device_setails_structure,device_network_details append in
+xml body
+if not use default values
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+    xmlns:enc="http://www.w3.org/2003/05/soap-encoding" xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+    xmlns:wsa5="http://www.w3.org/2005/08/addressing"
+    xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
+    xmlns:dn="http://www.onvif.org/ver10/network/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema"
+    xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+    <s:Header>
+        <wsa:MessageID>uuid:4c244a84-1dfd-185d-12d2-57265e5b725b</wsa:MessageID>
+        <wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>
+        <wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Hello</wsa:Action>
+    </s:Header>
+    <s:Body>
+        <d:Hello>
+            <wsa:EndpointReference>
+                <wsa:Address>urn:uuid:63033234-7f50-47c8-56d3-4b950a627254</wsa:Address>
+            </wsa:EndpointReference>
+            <d:Types>dn:NetworkVideoTransmitter tds:Device</d:Types>
+            <d:Scopes>onvif://www.onvif.org/location/country/china
+                onvif://www.onvif.org/type/video_encoder onvif://www.onvif.org/name/IP-Camera
+                onvif://www.onvif.org/hardware/HI3518C onvif://www.onvif.org/Profile/Streaming
+                onvif://www.onvif.org/Profile/T onvif://www.onvif.org/Profile/G
+                onvif://www.onvif.org/Profile/C onvif://www.onvif.org/Profile/A
+                onvif://www.onvif.org/Profile/M</d:Scopes>
+            <d:XAddrs>http://10.8.0.2:9000/onvif/device_service</d:XAddrs>
+            <d:MetadataVersion>1</d:MetadataVersion>
+        </d:Hello>
+    </s:Body>
+</s:Envelope>

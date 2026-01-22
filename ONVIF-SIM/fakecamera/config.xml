@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <config>
-    <server_port>8000</server_port>
+    <server_port>9000</server_port>
 </config>
