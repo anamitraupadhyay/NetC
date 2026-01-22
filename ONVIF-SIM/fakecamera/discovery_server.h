@@ -270,6 +270,32 @@ void getdevicename(char *device_name, uint8_t buffersize){
     }
 }
 
+int get_server_port() {
+  
+    FILE *fp = fopen("config.xml", "r");
+    if (!fp) {
+      perror("fopen config.xml");
+      return -1;
+    }
+
+    char buffer[256];
+    int port = -1;
+
+    // Read file line by line
+    while (fgets(buffer, sizeof(buffer), fp)) {
+      // Look for the server_port tag
+      char *start = strstr(buffer, "<server_port>");
+      if (start) {
+        start += strlen("<server_port>");
+        port = atoi(start); // Convert string to integer ofcourse duh
+        break; // No need if(start) again it ends here
+      }
+    }
+
+    fclose(fp);
+    return port;
+  }
+
 // Disclaimer printf stmts are added by llm
 void *discovery(void *arg) {
   (void)arg; // suppress unused warning
