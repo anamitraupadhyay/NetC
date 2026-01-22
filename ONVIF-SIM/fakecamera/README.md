@@ -58,6 +58,28 @@ A minimal ONVIF-compliant camera emulator that implements WS-Discovery and HTTP-
 | `auth.xml` | Device information template |
 | `Credentials.csv` | Username/password pairs for authentication |
 | `Attempts.csv` | Log of authentication attempts |
+| `last_response.xml` | Debug file - last sent discovery response (auto-generated, gitignored) |
+
+## UUID Management
+
+The discovery server uses two types of UUIDs:
+
+### Device Endpoint UUID (Fixed)
+- **Purpose**: Identifies the device uniquely across all discovery requests
+- **Source**: Derived from `/etc/machine-id` for consistency across restarts
+- **Location**: `<a:EndpointReference><a:Address>` element
+- **Behavior**: Remains the same for all responses from this device
+
+### Response MessageID (Dynamic)
+- **Purpose**: Uniquely identifies each response message
+- **Source**: Generated fresh for each probe response using `/dev/urandom`
+- **Location**: `<a:MessageID>` element in the response header
+- **Behavior**: Different for every response
+
+### RelatesTo
+- **Purpose**: Links response back to the original probe request
+- **Source**: Extracted from the incoming probe's `<a:MessageID>`
+- **Behavior**: Always matches the probe's MessageID
 
 ## Theory: UDP vs TCP for ONVIF
 
