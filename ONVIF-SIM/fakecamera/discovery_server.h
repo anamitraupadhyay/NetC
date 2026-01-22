@@ -12,11 +12,11 @@
 #include <time.h>
 #include <fcntl.h>
 
+#include "config.h"
 
 #define DISCOVERY_PORT      3702
 #define MULTICAST_ADDR      "239.255.255.250"
 #define CAMERA_NAME         "Videonetics_Camera_Emulator"
-#define CAMERA_HTTP_PORT    8080
 #define BUFFER_SIZE         65536
 
 // Fixed device endpoint UUID - this should be consistent for the same device
@@ -257,7 +257,7 @@ int build_response(const char *message_id, const char *relates_to_id, const char
       endpoint_uuid,   // 3. <a:Address> - FIXED device endpoint UUID
       device_name,     // 4. Device Name in Scopes
       local_ip,        // 5. IP Address in XAddrs
-      CAMERA_HTTP_PORT // 6. Port in XAddrs
+      get_camera_http_port() // 6. Port in XAddrs (from config.xml)
   );
   return len;
 }
@@ -269,32 +269,6 @@ void getdevicename(char *device_name, uint8_t buffersize){
         perror("gethostname");
     }
 }
-
-int get_server_port() {
-  
-    FILE *fp = fopen("config.xml", "r");
-    if (!fp) {
-      perror("fopen config.xml");
-      return -1;
-    }
-
-    char buffer[256];
-    int port = -1;
-
-    // Read file line by line
-    while (fgets(buffer, sizeof(buffer), fp)) {
-      // Look for the server_port tag
-      char *start = strstr(buffer, "<server_port>");
-      if (start) {
-        start += strlen("<server_port>");
-        port = atoi(start); // Convert string to integer ofcourse duh
-        break; // No need if(start) again it ends here
-      }
-    }
-
-    fclose(fp);
-    return port;
-  }
 
 // Disclaimer printf stmts are added by llm
 void *discovery(void *arg) {

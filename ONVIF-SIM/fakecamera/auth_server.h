@@ -12,11 +12,11 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "config.h"
+
 #define DISCOVERY_PORT 3702
 #define MULTICAST_ADDR "239.255.255.250"
-#define CAMERA_HTTP_PORT 8080
 #define BUFFER_SIZE 65536
-#define AUTH_PORT 8080
 #define MAX_CREDENTIALS 1024
 
 const char *auth_template =
@@ -113,7 +113,8 @@ bool csvparser(char *user, char *pass) {
 
 void *authentication(void *arg) {
   (void)arg;
-  printf("Auth server started on port %d\n", AUTH_PORT);
+  int auth_port = get_camera_http_port();
+  printf("Auth server started on port %d\n", auth_port);
 
   // can be added at first as xml is hardcoded
   FILE *xml = fopen("auth.xml", "w");
@@ -129,7 +130,7 @@ void *authentication(void *arg) {
 
   struct sockaddr_in addr = {0};
   addr.sin_family = AF_INET;
-  addr.sin_port = htons(AUTH_PORT);
+  addr.sin_port = htons(auth_port);
   addr.sin_addr.s_addr = INADDR_ANY;
 
   if (bind(sock, (struct sockaddr *)&addr, sizeof(addr))) {
