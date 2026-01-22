@@ -46,15 +46,14 @@ A minimal ONVIF-compliant camera emulator that implements WS-Discovery and HTTP-
 - **Why Flexible**: 
   - Per ONVIF spec, the HTTP port is advertised in discovery `<XAddrs>`
   - Clients read this from discovery response and connect accordingly
-  - Can be changed in `config.h` without breaking discovery
+  - Can be changed in `discovery_server.h` and `auth_server.h` to use a different port
 
 ## Files Overview
 
 | File | Purpose |
 |------|---------|
-| `config.h` | Centralized port and configuration definitions |
-| `discovery_server.h` | UDP multicast WS-Discovery implementation |
-| `auth_server.h` | TCP HTTP server for SOAP authentication |
+| `discovery_server.h` | UDP multicast WS-Discovery implementation (defines CAMERA_HTTP_PORT, DISCOVERY_PORT) |
+| `auth_server.h` | TCP HTTP server for SOAP authentication (defines AUTH_PORT = CAMERA_HTTP_PORT) |
 | `main.c` | Thread orchestration |
 | `dis.xml` | Cached discovery response (auto-generated) |
 | `auth.xml` | Device information template |
@@ -157,18 +156,22 @@ gcc -o fakecamera main.c -lpthread
 ./fakecamera
 
 # Output:
-# === ONVIF Fake Camera ===
-# Discovery Port (UDP): 3702
-# HTTP/Auth Port (TCP): 8080
-# ========================
 # Both servers running. Press Ctrl+C to stop.
+# === WS-Discovery Server ===
+# Auth server started on port 8080
+# Local IP: x.x.x.x
+# ...
 ```
 
 ## Changing the HTTP Port
 
-Edit `config.h`:
+Edit both `discovery_server.h` and `auth_server.h`:
 ```c
 #define CAMERA_HTTP_PORT 8081  // Changed from 8080
+```
+In `auth_server.h`, also change:
+```c
+#define AUTH_PORT 8081  // Changed from 8080
 ```
 
 The discovery response will automatically advertise the new port in XAddrs.
@@ -215,11 +218,11 @@ The existing `auth_server.h` already implements a TCP server that:
 
 Creating a separate HTTP server would be redundant. The minimal TCP implementation is sufficient for ONVIF's SOAP-over-HTTP.
 
-### Why Unified CAMERA_HTTP_PORT?
-- Discovery advertises the HTTP service URL
-- Auth server must bind to the same port
-- Single `config.h` ensures consistency
-- Changing port in one place updates everywhere
+### Why CAMERA_HTTP_PORT in Discovery?
+- Discovery advertises the HTTP service URL in XAddrs
+- Auth server must bind to the same port that discovery advertises
+- Both headers define the same port value (8080 by default)
+- To change the port, update both `discovery_server.h` and `auth_server.h`
 
 ### Why Not UDP for Auth?
 - SOAP requires reliable delivery

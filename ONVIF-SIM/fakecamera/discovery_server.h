@@ -12,7 +12,12 @@
 #include <time.h>
 #include <fcntl.h>
 
-#include "config.h"
+
+#define DISCOVERY_PORT      3702
+#define MULTICAST_ADDR      "239.255.255.250"
+#define CAMERA_NAME         "Videonetics_Camera_Emulator"
+#define CAMERA_HTTP_PORT    8080
+#define BUFFER_SIZE         65536
 
 static char g_cached_xml[BUFFER_SIZE];
 static size_t g_cached_xml_len = 0;
