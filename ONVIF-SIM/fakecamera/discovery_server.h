@@ -51,13 +51,26 @@ void init_device_uuid() {
         fclose(fp);
     }
     
-    // Fallback: generate a random but persistent UUID
+    // Fallback: generate a random UUID (note: this will change on each restart)
+    // For production, consider persisting this to a file
     uint8_t bytes[16] = {0};
     int fd = open("/dev/urandom", O_RDONLY);
     if (fd >= 0) {
-        ssize_t r = read(fd, bytes, sizeof(bytes));
-        (void)r; // suppress unused warning
+        ssize_t bytes_read = read(fd, bytes, sizeof(bytes));
         close(fd);
+        if (bytes_read != sizeof(bytes)) {
+            // If read failed, use time-based seed as last resort
+            srand((unsigned)time(NULL));
+            for (size_t i = 0; i < sizeof(bytes); i++) {
+                bytes[i] = (uint8_t)(rand() & 0xFF);
+            }
+        }
+    } else {
+        // /dev/urandom not available, use time-based seed
+        srand((unsigned)time(NULL));
+        for (size_t i = 0; i < sizeof(bytes); i++) {
+            bytes[i] = (uint8_t)(rand() & 0xFF);
+        }
     }
     // Set version 4 and variant bits
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
@@ -71,7 +84,7 @@ void init_device_uuid() {
         bytes[12], bytes[13], bytes[14], bytes[15]);
     
     g_device_uuid_initialized = true;
-    printf("[DEBUG] Device UUID (generated): %s\n", g_device_uuid);
+    printf("[DEBUG] Device UUID (fallback random): %s\n", g_device_uuid);
 }
 
 // copied probe match template
@@ -194,31 +207,40 @@ void getlocalip(char *buf, size_t size){
     close(sockfd);
 }
 
-void generate_uuid(char *buf, size_t size){
+void generate_uuid(char *buf, size_t size) {
     memset(buf, 0, size);
-    // for 1st part
-    uint8_t first[16] = {0};
-    int fd = open("/dev/urandom",O_RDONLY);
-    if(fd>=0){
-        ssize_t  readbuf= read(fd, first, sizeof(first)/*16*/); close(fd);
+    uint8_t bytes[16] = {0};
+    
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd >= 0) {
+        ssize_t bytes_read = read(fd, bytes, sizeof(bytes));
+        close(fd);
+        if (bytes_read != sizeof(bytes)) {
+            // If read failed, use time-based fallback
+            srand((unsigned)time(NULL) ^ (unsigned)getpid());
+            for (size_t i = 0; i < sizeof(bytes); i++) {
+                bytes[i] = (uint8_t)(rand() & 0xFF);
+            }
+        }
+    } else {
+        // /dev/urandom not available, use time-based fallback
+        srand((unsigned)time(NULL) ^ (unsigned)getpid());
+        for (size_t i = 0; i < sizeof(bytes); i++) {
+            bytes[i] = (uint8_t)(rand() & 0xFF);
+        }
     }
-    else{perror("open");}
-    // for the 2nd part
-    // 2 parts 1st 6 and then 8
-    // Set standard UUID bits (Version 4)
-    first[6] = (first[6] & 0x0f) | 0x40; // Version 4
-    first[8] = (first[8] & 0x3f) | 0x80; // Variant 1
+    
+    // Set standard UUID bits (Version 4, Variant 1)
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // Variant 1
 
-    // 4. Format string directly into the output buffer
-    // Structure is 8-4-4-4-12 hex digits
+    // Format as UUID string (8-4-4-4-12 hex digits)
     snprintf(buf, size, 
         "urn:uuid:%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-        first[0], first[1], first[2], first[3],
-        first[4], first[5],
-        first[6], first[7],
-        first[8], first[9],
-        first[10], first[11], first[12], first[13], first[14], first[15]
-    );
+        bytes[0], bytes[1], bytes[2], bytes[3],
+        bytes[4], bytes[5], bytes[6], bytes[7],
+        bytes[8], bytes[9], bytes[10], bytes[11],
+        bytes[12], bytes[13], bytes[14], bytes[15]);
 }
 
 
