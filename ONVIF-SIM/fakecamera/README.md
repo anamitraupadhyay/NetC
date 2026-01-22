@@ -55,7 +55,6 @@ A minimal ONVIF-compliant camera emulator that implements WS-Discovery and HTTP-
 | `discovery_server.h` | UDP multicast WS-Discovery implementation (defines CAMERA_HTTP_PORT, DISCOVERY_PORT) |
 | `auth_server.h` | TCP HTTP server for SOAP authentication (defines AUTH_PORT = CAMERA_HTTP_PORT) |
 | `main.c` | Thread orchestration |
-| `dis.xml` | Cached discovery response (auto-generated) |
 | `auth.xml` | Device information template |
 | `Credentials.csv` | Username/password pairs for authentication |
 | `Attempts.csv` | Log of authentication attempts |

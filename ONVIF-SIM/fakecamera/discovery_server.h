@@ -42,7 +42,7 @@ const char *PROBE_MATCH_TEMPLATE =
     "<d:ProbeMatches>"
     "<d:ProbeMatch>"
     "<a:EndpointReference>"
-    "<a:Address>urn:uuid:%s</a:Address>"
+    "<a:Address>%s</a:Address>"
     "</a:EndpointReference>"
     "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
     "<d:Scopes>onvif://www.onvif.org/name/%s "
@@ -329,15 +329,7 @@ void *discovery(void *arg) {
 
   srand((unsigned)time(NULL));
 
-  FILE *disxml = fopen("dis.xml", "r");
-  if (disxml) {
-    if (!is_xml_empty(disxml)) {
-      fclose(disxml);
-      load_preloaded_xml();
-      return NULL;
-    }
-    fclose(disxml);
-  }
+  // Always use dynamic mode to ensure correct RelatesTo for each probe
 
   // Geting local IP
   char local_ip[64];
@@ -446,9 +438,7 @@ void *discovery(void *arg) {
         int send_len =
             build_response(message_id, relates_to_id, message_id, local_ip,
                            send_buf, sizeof(send_buf), device_name);
-        FILE *xml = fopen("dis.xml", "w");
-        fprintf(xml, "%s", send_buf);
-        fclose(xml);
+        // Note: Not saving to dis.xml to ensure each probe gets fresh response with correct RelatesTo
 
         // Send back 
         ssize_t sent = sendto(recieversocketudp, send_buf, (size_t)send_len, 0,

@@ -7,5 +7,6 @@ ONVIF-SIM/fakecamera/trial.c
 ONVIF-SIM/fakecamera/getcapabilities.xml
 ONVIF-SIM/fakecamera/main
 ONVIF-SIM/fakecamera/fakecamera
+ONVIF-SIM/fakecamera/dis.xml
 _codeql_detected_source_root
 */_codeql_build_dir/
