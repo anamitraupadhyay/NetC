@@ -11,3 +11,4 @@ ONVIF-SIM/fakecamera/dis.xml
 ONVIF-SIM/fakecamera/last_response.xml
 _codeql_detected_source_root
 */_codeql_build_dir/
+ONVIF-SIM/fakecamera/discovery_traffic.log

@@ -274,6 +274,8 @@ void getdevicename(char *device_name, uint8_t buffersize){
 void *discovery(void *arg) {
   (void)arg; // suppress unused warning
 
+  printf("[DEBUG] Process PID: %d\n", getpid());
+
   printf("=== WS-Discovery Server ===\n");
 
   srand((unsigned)time(NULL));
