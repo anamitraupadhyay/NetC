@@ -40,25 +40,83 @@ A minimal ONVIF-compliant camera emulator that implements WS-Discovery and HTTP-
 - **Why Fixed**: ONVIF mandates WS-Discovery on this port; all ONVIF devices and clients must use it
 - **Multicast Address**: 239.255.255.250
 
-### Flexible Port (CAMERA_HTTP_PORT = 8080)
+### Configurable HTTP Port (default: 8080)
 - **Protocol**: TCP HTTP
 - **Purpose**: ONVIF Device Services (GetDeviceInformation, etc.)
-- **Why Flexible**: 
-  - Per ONVIF spec, the HTTP port is advertised in discovery `<XAddrs>`
-  - Clients read this from discovery response and connect accordingly
-  - Can be changed in `discovery_server.h` and `auth_server.h` to use a different port
+- **Configuration**: Set in `config.xml`:
+  ```xml
+  <config>
+      <server_port>8080</server_port>
+  </config>
+  ```
+- **Why Configurable**: Per ONVIF spec, the HTTP port is advertised in discovery `<XAddrs>`
+
+## Configuration (config.xml)
+
+The emulator reads configuration from `config.xml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<config>
+    <!-- Network Configuration -->
+    <server_port>8080</server_port>
+    
+    <!-- Device Information -->
+    <device>
+        <manufacturer>Videonetics</manufacturer>
+        <model>Videonetics_Camera_Emulator</model>
+        <firmware_version>10.0</firmware_version>
+        <serial_number>VN001</serial_number>
+        <hardware_id>1.0</hardware_id>
+    </device>
+    
+    <!-- ONVIF Scopes -->
+    <scopes>
+        <scope>onvif://www.onvif.org/type/video_encoder</scope>
+        <scope>onvif://www.onvif.org/Profile/Streaming</scope>
+    </scopes>
+</config>
+```
 
 ## Files Overview
 
 | File | Purpose |
 |------|---------|
-| `discovery_server.h` | UDP multicast WS-Discovery implementation (defines CAMERA_HTTP_PORT, DISCOVERY_PORT) |
-| `auth_server.h` | TCP HTTP server for SOAP authentication (defines AUTH_PORT = CAMERA_HTTP_PORT) |
 | `main.c` | Thread orchestration |
+| `discovery_server.h` | UDP multicast WS-Discovery implementation |
+| `auth_server.h` | TCP HTTP server for SOAP authentication |
+| `config.h` | Configuration loading (XML parsing) |
+| `config.xml` | Configuration file (port, device info) |
+| `xml_parser.h` | libxml2-based XML parsing utilities |
 | `auth.xml` | Device information template |
 | `Credentials.csv` | Username/password pairs for authentication |
 | `Attempts.csv` | Log of authentication attempts |
 | `last_response.xml` | Debug file - last sent discovery response (auto-generated, gitignored) |
+
+### Documentation
+
+See `docs/` folder for detailed documentation:
+- `docs/libxml2_transition.md` - Transition from simple XML parsing to libxml2, including Swift XMLParser interop
+
+## XML Parsing
+
+The emulator supports two XML parsing modes:
+
+### Simple Parser (Default)
+- No external dependencies
+- Uses `strstr()` for basic XML parsing
+- Sufficient for simple config files
+
+### libxml2 Parser (Optional)
+- Full XML 1.0 compliance
+- XPath support
+- Namespace-aware parsing
+- Enable with `-DUSE_LIBXML2`
+
+```bash
+# Build with libxml2 support
+gcc -DUSE_LIBXML2 -o fakecamera main.c -lpthread $(pkg-config --cflags --libs libxml-2.0)
+```
 
 ## UUID Management
 
@@ -169,30 +227,45 @@ while (1) {
 
 ## Building and Running
 
+### Basic Build (no libxml2)
 ```bash
 # Compile
 gcc -o fakecamera main.c -lpthread
 
 # Run
 ./fakecamera
+```
 
-# Output:
-# Both servers running. Press Ctrl+C to stop.
-# === WS-Discovery Server ===
-# Auth server started on port 8080
-# Local IP: x.x.x.x
-# ...
+### Build with libxml2 (recommended)
+```bash
+# Install libxml2 (Ubuntu/Debian)
+sudo apt-get install libxml2-dev
+
+# Compile with libxml2 support
+gcc -DUSE_LIBXML2 -o fakecamera main.c -lpthread $(pkg-config --cflags --libs libxml-2.0)
+
+# Run
+./fakecamera
+```
+
+### Expected Output
+```
+Both servers running. Press Ctrl+C to stop.
+=== WS-Discovery Server ===
+[CONFIG] Loaded config using simple parser from config.xml
+[CONFIG] server_port=8080, manufacturer=Videonetics, model=Videonetics_Camera_Emulator
+Auth server started on port 8080
+Local IP: x.x.x.x
+...
 ```
 
 ## Changing the HTTP Port
 
-Edit both `discovery_server.h` and `auth_server.h`:
-```c
-#define CAMERA_HTTP_PORT 8081  // Changed from 8080
-```
-In `auth_server.h`, also change:
-```c
-#define AUTH_PORT 8081  // Changed from 8080
+Simply edit `config.xml`:
+```xml
+<config>
+    <server_port>9000</server_port>
+</config>
 ```
 
 The discovery response will automatically advertise the new port in XAddrs.

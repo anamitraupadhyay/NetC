@@ -1,29 +1,45 @@
-{
-"server_ip": "172.16.4.9",
-"server_port": 8000,
-"scopes": [
-{
-"manufacturer": "VTPL",
-"model": "emulator"
-},
-scope
-]
-}
+# Future Work Notes
 
+## Configuration Format: XML (not JSON)
 
-device_setails_structure{
-char manufacturer[128];
-char model[128];
-}
+The configuration uses simple XML format instead of JSON:
 
-device_network_details{
-char server_ip[16];
-int server_port;
-}
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<config>
+    <server_port>8000</server_port>
+    <device>
+        <manufacturer>VTPL</manufacturer>
+        <model>emulator</model>
+    </device>
+    <scopes>
+        <scope>onvif://www.onvif.org/type/video_encoder</scope>
+    </scopes>
+</config>
+```
 
-if file exits json read from there update device_setails_structure,device_network_details append in
-xml body
-if not use default values
+## Data Structures (C)
+
+```c
+typedef struct {
+    char manufacturer[128];
+    char model[128];
+} device_details_t;
+
+typedef struct {
+    char server_ip[16];
+    int server_port;
+} device_network_t;
+```
+
+## Flow
+
+1. If config.xml exists, read and parse using libxml2 (or simple parser)
+2. Update device_details and device_network structures
+3. Append values into XML SOAP body
+4. If config.xml not found, use default values
+
+## Example SOAP Hello Message
 <?xml version="1.0" encoding="UTF-8"?>
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
     xmlns:enc="http://www.w3.org/2003/05/soap-encoding" xmlns:xsd="http://www.w3.org/2001/XMLSchema"
