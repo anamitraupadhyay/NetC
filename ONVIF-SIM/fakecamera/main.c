@@ -4,6 +4,7 @@
 
 int main(void) {
   pthread_t t_disc, t_auth;
+  // t_auth to be later changed as tcp_server *IMPORTANT*
 
   if (pthread_create(&t_disc, NULL, discovery, NULL) != 0) {
     perror("pthread_create discovery");
