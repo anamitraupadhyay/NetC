@@ -10,8 +10,10 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <time.h>
 
-#include "config.h"
+//#include "config.h"
+#include "simpleparser.h"
 
 static char g_cached_xml[BUFFER_SIZE];
 static size_t g_cached_xml_len = 0;
@@ -31,6 +33,42 @@ bool isprobe(const char *msg) {
     }
     return false;
 }
+
+void generate_messageid(char *buf, size_t size){
+    memset(buf, 0, size);
+    uint8_t bytes[16] = {0};
+    int fd = open("/dev/urandom", O_RDONLY);
+        if (fd >= 0) {
+            ssize_t bytes_read = read(fd, bytes, sizeof(bytes));
+            close(fd);
+            if (bytes_read != sizeof(bytes)) {
+                // If read failed, use time-based fallback
+                srand((unsigned)time(NULL) ^ (unsigned)getpid());
+                for (size_t i = 0; i < sizeof(bytes); i++) {
+                    bytes[i] = (uint8_t)(rand() & 0xFF);
+                }
+            }
+        } else {
+            // /dev/urandom not available, use time-based fallback
+            srand((unsigned)time(NULL) ^ (unsigned)getpid());
+            for (size_t i = 0; i < sizeof(bytes); i++) {
+                bytes[i] = (uint8_t)(rand() & 0xFF);
+            }
+        }
+        
+        // Set standard UUID bits (Version 4, Variant 1)
+        bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
+        bytes[8] = (bytes[8] & 0x3f) | 0x80; // Variant 1
+    
+        // Format as UUID string (8-4-4-4-12 hex digits)
+        snprintf(buf, size, 
+            "urn:uuid:%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]);
+}
+
 void getmessageid(const char *msg, char *out, size_t out_size) {
     // Look for <wsa:MessageID> first (most common)
     const char *start = strstr(msg, "<wsa:MessageID");
@@ -96,23 +134,59 @@ void initdevice_uuid(){
     else{}
 }
 
+void getlocalip(char *buf, size_t size){
+    int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if(sockfd<0){
+        perror("socket");
+        return; 
+    }
+
+    struct sockaddr_in sockaddr;
+    memset(&sockaddr, 0, sizeof(sockaddr));
+    sockaddr.sin_port = htons(9000);
+    sockaddr.sin_family = AF_INET;
+    inet_pton(AF_INET, "8.8.8.8", &sockaddr.sin_addr);
+
+    if (connect(sockfd, (struct sockaddr*)&sockaddr, sizeof(sockaddr)) < 0) {
+        close(sockfd);
+        strncpy(buf, "127.0.0.1", size);
+        return;
+    }
+    
+    struct sockaddr_in name;
+    socklen_t namelen = sizeof(name);
+    getsockname(sockfd, (struct sockaddr*)&name, &namelen);
+    
+    inet_ntop(AF_INET, &name.sin_addr, buf, size);
+    close(sockfd);
+}
+
 
 int build_response(const char *message_id, const char * relates_to_id, const char *message_id1,const char *local_ip,
                     char *buf, size_t size, char *device_name);
-/* Build response copypasted not anymore*/
-int build_response(const char *message_id ,const char *relates_to_id, const char *message_id1,const char *local_ip,
+/* Build response*/
+
+int build_response(const char *message_id ,const char *relates_to_id, 
+                   const char *message_id1,const char *local_ip,
                    char *buf, size_t size, char *device_name) {
+                       
+  config cfg = {0};
+  if(!load_config("config.xml", &cfg)){
+      perror("config.xml");
+      int len = snprintf(
+          buf, size, PROBE_MATCH_TEMPLATE,
+          message_id,  // 1. <a:MessageID> (UUID)
+          relates_to_id,   // 2. <a:RelatesTo> (The ID from the request)
+          message_id,
+          device_name,     // 3. Device Name
+          local_ip,        // 4. IP Address
+          CAMERA_HTTP_PORT // 5. Port
+      );
+      return len;
+  }
+  int len1 = snprintf();
+  return len1;
   
-  int len = snprintf(
-      buf, size, PROBE_MATCH_TEMPLATE,
-      message_id,  // 1. <a:MessageID> (UUID)
-      relates_to_id,   // 2. <a:RelatesTo> (The ID from the request)
-      message_id,
-      device_name,     // 3. Device Name
-      local_ip,        // 4. IP Address
-      CAMERA_HTTP_PORT // 5. Port
-  );
-  return len;
 }
 
 void getdevicename(char *device_name, uint8_t buffersize){

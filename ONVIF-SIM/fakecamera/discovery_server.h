@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <stdatomic.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -10,7 +11,7 @@
 #include <fcntl.h>
 
 //#include "config.h"
-#include "simpleparser.h"
+//#include "simpleparser.h"
 #include "dis_utils.h"
 
 // from close observation there are 5 fields to be extracted
@@ -20,41 +21,20 @@
 
 // checking its probe or discovery 
 
-void getlocalip(char *buf, size_t size){
-    int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if(sockfd<0){
-        perror("socket");
-        return; 
-    }
-
-    struct sockaddr_in sockaddr;
-    memset(&sockaddr, 0, sizeof(sockaddr));
-    sockaddr.sin_port = htons(9000);
-    sockaddr.sin_family = AF_INET;
-    inet_pton(AF_INET, "8.8.8.8", &sockaddr.sin_addr);
-
-    if (connect(sockfd, (struct sockaddr*)&sockaddr, sizeof(sockaddr)) < 0) {
-        close(sockfd);
-        strncpy(buf, "127.0.0.1", size);
-        return;
-    }
-    
-    struct sockaddr_in name;
-    socklen_t namelen = sizeof(name);
-    getsockname(sockfd, (struct sockaddr*)&name, &namelen);
-    
-    inet_ntop(AF_INET, &name.sin_addr, buf, size);
-    close(sockfd);
-}
 
 // Disclaimer printf stmts are added by llm
 void *discovery(void *arg) {
+    (void)arg; // suppress unused warning
+    printf("[DEBUG] process id:%d\n",getpid());
 
   printf("=== WS-Discovery Server ===\n");
 
   srand((unsigned)time(NULL));
+  // init dev uuid
+  initdevice_uuid();
+  printf("[DEBUG] device endpoint uuid:%s\n",device_uuid);
 
-  FILE *disxml = fopen("dis.xml", "r");
+  /*FILE *disxml = fopen("dis.xml", "r");
   if (disxml) {
     if (!is_xml_empty(disxml)) {
       fclose(disxml);
@@ -62,7 +42,7 @@ void *discovery(void *arg) {
       return NULL;
     }
     fclose(disxml);
-  }
+  }*/
 
   // Geting local IP
   char local_ip[64];
@@ -144,15 +124,6 @@ void *discovery(void *arg) {
         
         if (n <= 0) continue;
         recv_buf[n] = '\0';
-
-        getmessageid(recv_buf, relates_to_id, sizeof(relates_to_id));
-
-        // these 2 up and down function calls should
-        // be inside here for each m=usnique message parse
-
-        //generate_uuid(message_id, 46);
-        initdevice_uuid();
-
         
         // Check if it's a probe with error handling
         // will enhance the error handling later
@@ -161,6 +132,18 @@ void *discovery(void *arg) {
         }
         
         probe_count++;
+
+        // this messageid from incoming probe next reponses' relatesto
+        getmessageid(recv_buf, relates_to_id, sizeof(relates_to_id));
+
+        // these 2 up and down function calls should
+        // be inside here for each unique message parse
+
+        // any random msgid for now later for resposnse
+        generate_messageid(message_id, 46);
+        //not here as i have a static var
+
+        
         
         /* Get client IP for printing */
         char client_ip[64];
