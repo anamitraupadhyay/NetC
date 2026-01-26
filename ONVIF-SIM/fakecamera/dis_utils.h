@@ -184,7 +184,11 @@ int build_response(const char *message_id ,const char *relates_to_id,
       );
       return len;
   }
-  int len1 = snprintf();
+  int len1 = snprintf(
+      buf, size, PROBE_MATCH_TEMPLATE,
+      message_id, relates_to_id, message_id,
+      cfg.model,local_ip,cfg.server_port
+  );
   return len1;
   
 }
