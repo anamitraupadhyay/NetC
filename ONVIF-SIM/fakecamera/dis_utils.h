@@ -127,7 +127,7 @@ void initdevice_uuid(){
             // now take only the 1st 32 chars of machine_id
             if(strlen(machine_id)>=32){
                 snprintf(device_uuid, sizeof(device_uuid),
-                                    "urn:uuid:%.8s-%.4s-%.4s-%.4s-%.12s",
+                                    "%.8s-%.4s-%.4s-%.4s-%.12s",
                                     machine_id, machine_id+8, machine_id+12, machine_id+16, machine_id+20);
                                 device_uuid_inited = true;
                                 fclose(fp);
