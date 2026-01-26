@@ -62,7 +62,7 @@ void generate_messageid(char *buf, size_t size){
     
         // Format as UUID string (8-4-4-4-12 hex digits)
         snprintf(buf, size, 
-            "urn:uuid:%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+            "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
             bytes[0], bytes[1], bytes[2], bytes[3],
             bytes[4], bytes[5], bytes[6], bytes[7],
             bytes[8], bytes[9], bytes[10], bytes[11],
@@ -127,11 +127,16 @@ void initdevice_uuid(){
             // now take only the 1st 32 chars of machine_id
             if(strlen(machine_id)>=32){
                 snprintf(device_uuid, sizeof(device_uuid),
-                    "urn:uuid:");
+                                    "urn:uuid:%.8s-%.4s-%.4s-%.4s-%.12s",
+                                    machine_id, machine_id+8, machine_id+12, machine_id+16, machine_id+20);
+                                device_uuid_inited = true;
+                                fclose(fp);
+                                printf("[DEBUG] Device UUID from machine-id: %s\n", device_uuid);
+                                return;
             }
         }
     }
-    else{}
+    fclose(fp);
 }
 
 void getlocalip(char *buf, size_t size){
@@ -186,7 +191,7 @@ int build_response(const char *message_id ,const char *relates_to_id,
   }
   int len1 = snprintf(
       buf, size, PROBE_MATCH_TEMPLATE,
-      message_id, relates_to_id, message_id,
+      message_id, relates_to_id, device_uuid,
       cfg.model,local_ip,cfg.server_port
   );
   return len1;
