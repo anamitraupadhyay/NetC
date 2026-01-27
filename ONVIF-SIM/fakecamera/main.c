@@ -3,15 +3,17 @@
 #include <pthread.h>
 
 int main(void) {
-  pthread_t t_disc, t_auth;
+  pthread_t t_disc, tcpserv; // t_auth;
   // t_auth to be later changed as tcp_server *IMPORTANT*
 
-  if (pthread_create(&t_disc, NULL, discovery, NULL) != 0) {
+  if (pthread_create(&t_disc, 
+    NULL, discovery, NULL) != 0) {
     perror("pthread_create discovery");
     return 1;
   }
 
-  if (pthread_create(&t_auth, NULL, authentication, NULL) != 0) {
+  if (pthread_create(&tcpserv, 
+    NULL, tcpserver, NULL) != 0) {
     perror("pthread_create auth");
     pthread_cancel(t_disc);
     return 1;
@@ -20,7 +22,7 @@ int main(void) {
   printf("Both servers running. Press Ctrl+C to stop.\n");
 
   pthread_join(t_disc, NULL);
-  pthread_join(t_auth, NULL);
+  pthread_join(tcpserv, NULL);
 
   printf("Clean exit.\n");
   return 0;
