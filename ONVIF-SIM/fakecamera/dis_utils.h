@@ -172,11 +172,16 @@ int build_response(const char *message_id, const char * relates_to_id, const cha
 /* Build response*/
 
 int build_response(const char *message_id ,const char *relates_to_id, 
-                   const char *message_id1,const char *local_ip,
+                   const char *message_id1,
+                   const char *manufacturer, const char *hardware,
+                   const char *location, const char *profile, const char *type,
+                   const char *local_ip,
                    char *buf, size_t size, char *device_name) {
                        
   config cfg = {0};
-  if(!load_config("config.xml", &cfg)){
+  load_config("config.xml", &cfg);
+  /*if(!load_config("config.xml", &cfg)){// error prone needs serious field 
+                                    // repopulation, became more erred
       perror("config.xml");
       int len = snprintf(
           buf, size, PROBE_MATCH_TEMPLATE,
@@ -188,11 +193,21 @@ int build_response(const char *message_id ,const char *relates_to_id,
           CAMERA_HTTP_PORT // 5. Port
       );
       return len;
-  }
+  }*/
+  // this acts form 
   int len1 = snprintf(
       buf, size, PROBE_MATCH_TEMPLATE,
-      message_id, relates_to_id, device_uuid,
-      cfg.model,local_ip,cfg.server_port
+      message_id, //uuid
+      relates_to_id, //relatesto
+      device_uuid, //etc/machine-id
+      cfg.model, //xml model
+      cfg.manufacturer,
+      cfg.hardware,
+      cfg.location,
+      cfg.profile,
+      cfg.type,
+      local_ip, //not xml ip for now
+      cfg.server_port //xml server port
   );
   return len1;
   

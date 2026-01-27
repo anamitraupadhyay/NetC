@@ -53,6 +53,12 @@ void *discovery(void *arg) {
   char device_name[64] = CAMERA_NAME;
   // getdevicename(device_name, 64);
   printf("device %s", device_name);
+  
+  char manufacturer[64] = {0};
+  char hardware[64] = {0};
+  char location[64] = {0};
+  char profile[64] = {0};
+  char type[64] = {0};
 
   // always on udp server
   // setupped with port
@@ -153,7 +159,7 @@ void *discovery(void *arg) {
         
         // build response and send back
         int send_len =
-            build_response(message_id, relates_to_id, message_id, local_ip,
+            build_response(message_id, relates_to_id, message_id, manufacturer, hardware, location, profile, type, local_ip,
                            send_buf, sizeof(send_buf), device_name);
         FILE *xml = fopen("dis.xml", "w");
         fprintf(xml, "%s", send_buf);

@@ -61,6 +61,22 @@ int load_config(const char *filename, config *cfg)
         else if (get_the_tag(line, "serial_number",
                                    cfg->serial_number,
                                    sizeof(cfg->serial_number)));
+        
+        else if(get_the_tag(line, "hardware", 
+                                   cfg->hardware, 
+                                   sizeof(cfg->hardware)));
+        
+        else if(get_the_tag(line, "location", 
+                                   cfg->location, 
+                                   sizeof(cfg->location)));
+        
+        else if(get_the_tag(line, "profile", 
+                                   cfg->profile, 
+                                   sizeof(cfg->profile)));
+        
+        else if(get_the_tag(line, "type", 
+                                   cfg->type, 
+                                   sizeof(cfg->type)));
             
 
         else if (get_the_tag(line, "hardware_id", buf,sizeof(buf)))

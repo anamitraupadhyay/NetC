@@ -16,6 +16,10 @@ struct datafromxml{
     float firmware_version;
     char serial_number[32];
     float hardware_id;
+    char type[64];
+    char profile[64];
+    char hardware[64];
+    char location[64];
 };
 /*datafromxml placing here was giving error 
 so instead declared beside struct*/
@@ -46,10 +50,11 @@ const char *PROBE_MATCH_TEMPLATE =
     "</a:EndpointReference>"
     "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
     "<d:Scopes>onvif://www.onvif.org/name/%s "
-    "onvif://www.onvif.org/manufacturer/VideoneticsTPL "
-    "onvif://www.onvif.org/hardware/Videonetics_Management_System "
-    "onvif://www.onvif.org/location/Any "
-    "onvif://www.onvif.org/type/video_encoder</d:Scopes>"
+    "onvif://www.onvif.org/manufacturer/%s "
+    "onvif://www.onvif.org/hardware/%s "
+    "onvif://www.onvif.org/location/%s "
+    "onvif://www.onvif.org/profile/%s "
+    "onvif://www.onvif.org/type/%s</d:Scopes>"
     "<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
     "<d:MetadataVersion>1</d:MetadataVersion>"
     "</d:ProbeMatch>"
