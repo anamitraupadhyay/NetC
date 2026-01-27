@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <config>
     <!-- Network Configuration -->
-    <server_port>9000</server_port>
+    <server_ip>172.16.4.9</server_ip>
+    <server_port>7000</server_port>
     
     <!-- Device Information -->
     <device>
