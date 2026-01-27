@@ -1,3 +1,6 @@
+#ifndef DIS_UTILS_H
+#define DIS_UTILS_H
+
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -350,3 +353,4 @@ void load_preloaded_xml() {
     }
   }
 }
+#endif /* DIS_UTILS_H */

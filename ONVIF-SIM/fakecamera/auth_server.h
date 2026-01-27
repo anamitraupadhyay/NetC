@@ -1,5 +1,14 @@
+#ifndef AUTH_SERVER_H
+#define AUTH_SERVER_H
+
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
 #include "auth_utils.h"
-#include "simpleparser.h"
+//#include "simpleparser.h"
+#include "dis_utils.h"
 
 /*void *tcpserver(void *arg) {
   (void)arg;
@@ -140,8 +149,8 @@ void *tcpserver1(void *arg) {
         getmessageid1(buf, request_message_id, sizeof(request_message_id));
         
         // Generate new UUID for response MessageID
-        char response_message_id[64] = {0};
-        generate_messageid1(response_message_id, sizeof(response_message_id));
+        char *response_message_id = device_uuid;
+        //generate_messageid1(response_message_id, sizeof(response_message_id));
         
         // Load configuration from config.xml using simpleparser in main for now
         config cfg2 = {0};
@@ -193,3 +202,4 @@ void *tcpserver1(void *arg) {
   close(sock);
   return NULL;
 }
+#endif /* AUTH_SERVER_H */

@@ -1,3 +1,6 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -61,3 +64,5 @@ const char *PROBE_MATCH_TEMPLATE =
     "</d:ProbeMatches>"
     "</s:Body>"
     "</s:Envelope>";
+
+#endif /* CONFIG_H */

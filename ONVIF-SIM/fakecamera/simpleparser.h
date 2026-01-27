@@ -1,3 +1,6 @@
+#ifndef SIMPLEPARSER_H
+#define SIMPLEPARSER_H
+
 #include <stdint.h>
 #include <uchar.h>
 #include <stdio.h>
@@ -33,7 +36,7 @@ static inline uint8_t get_the_tag(
     return 1;
 }
 
-int inline load_config(const char *filename, config *cfg)
+static inline int load_config(const char *filename, config *cfg)
 {
     FILE *fp = fopen(filename, "r");
     if (!fp) return 0;
@@ -86,3 +89,4 @@ int inline load_config(const char *filename, config *cfg)
     fclose(fp);
     return 1;
 }
+#endif /* SIMPLEPARSER_H */

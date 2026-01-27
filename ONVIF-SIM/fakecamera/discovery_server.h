@@ -1,3 +1,6 @@
+#ifndef DISCOVERY_SERVER_H
+#define DISCOVERY_SERVER_H
+
 #include <arpa/inet.h>
 #include <asm-generic/socket.h>
 #include <netinet/in.h>
@@ -9,6 +12,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <fcntl.h>
+#include <string.h>
 
 //#include "config.h"
 //#include "simpleparser.h"
@@ -175,3 +179,4 @@ void *discovery(void *arg) {
     }
     return NULL;
 }
+#endif /* DISCOVERY_SERVER_H */
