@@ -1,3 +1,6 @@
+#ifndef SIMPLEPARSER_H
+#define SIMPLEPARSER_H
+
 #include <stdint.h>
 #include <uchar.h>
 #include <stdio.h>
@@ -86,3 +89,5 @@ int load_config(const char *filename, config *cfg)
     fclose(fp);
     return 1;
 }
+
+#endif // SIMPLEPARSER_H
