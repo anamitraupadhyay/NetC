@@ -1,3 +1,11 @@
+#ifndef AUTH_SERVER_H
+#define AUTH_SERVER_H
+
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
 #include "auth_utils.h"
 #include "simpleparser.h"
 
@@ -66,7 +74,7 @@
 
     char response[BUFFER_SIZE];
     // severe minimally inclined alterations are required
-    if (is_GetDeviceInformation) {
+    if (is_get_device_information(buf)) {
       // Success 200
       snprintf(response, sizeof(response),
                "HTTP/1.1 200 OK\r\n"
@@ -193,3 +201,4 @@ void *tcpserver1(void *arg) {
   close(sock);
   return NULL;
 }
+#endif /* AUTH_SERVER_H */

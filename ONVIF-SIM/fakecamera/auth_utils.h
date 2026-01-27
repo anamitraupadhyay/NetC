@@ -1,7 +1,13 @@
+#ifndef AUTH_UTILS_H
+#define AUTH_UTILS_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "tcp_config.h"
 
@@ -167,3 +173,5 @@ void getmessageid1(const char *msg, char *out, size_t out_size) {
         out[--len] = '\0';
     }
 }
+
+#endif /* AUTH_UTILS_H */

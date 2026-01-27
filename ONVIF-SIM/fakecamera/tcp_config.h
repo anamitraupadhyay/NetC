@@ -1,3 +1,6 @@
+#ifndef TCP_CONFIG_H
+#define TCP_CONFIG_H
+
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -87,3 +90,5 @@ const char *GET_SERVICES_TEMPLATE =
     "</tds:GetServicesResponse>"
     "</s:Body>"
     "</s:Envelope>";
+
+#endif /* TCP_CONFIG_H */

@@ -1,3 +1,6 @@
+#ifndef SIMPLEPARSER_H
+#define SIMPLEPARSER_H
+
 #include <stdint.h>
 #include <uchar.h>
 #include <stdio.h>
@@ -33,7 +36,7 @@ static inline uint8_t get_the_tag(
     return 1;
 }
 
-int inline load_config(const char *filename, config *cfg)
+static inline int load_config(const char *filename, config *cfg)
 {
     FILE *fp = fopen(filename, "r");
     if (!fp) return 0;
@@ -47,12 +50,14 @@ int inline load_config(const char *filename, config *cfg)
             cfg->server_port = (uint16_t)atoi(buf);
 
         else if (get_the_tag(line, "manufacturer", cfg->manufacturer,
-                                   sizeof(cfg->manufacturer)));
+                                   sizeof(cfg->manufacturer)))
+            ; // Empty statement intentionally kept
             
 
         else if (get_the_tag(line, "model", 
                                     cfg->model,
-                                    sizeof(cfg->model)));
+                                    sizeof(cfg->model)))
+            ; // Empty statement intentionally kept
             
 
         else if (get_the_tag(line, "firmware_version", buf, sizeof(buf)))
@@ -60,29 +65,36 @@ int inline load_config(const char *filename, config *cfg)
 
         else if (get_the_tag(line, "serial_number",
                                    cfg->serial_number,
-                                   sizeof(cfg->serial_number)));
+                                   sizeof(cfg->serial_number)))
+            ; // Empty statement intentionally kept
         
         else if(get_the_tag(line, "hardware", 
                                    cfg->hardware, 
-                                   sizeof(cfg->hardware)));
+                                   sizeof(cfg->hardware)))
+            ; // Empty statement intentionally kept
         
         else if(get_the_tag(line, "location", 
                                    cfg->location, 
-                                   sizeof(cfg->location)));
+                                   sizeof(cfg->location)))
+            ; // Empty statement intentionally kept
         
         else if(get_the_tag(line, "profile", 
                                    cfg->profile, 
-                                   sizeof(cfg->profile)));
+                                   sizeof(cfg->profile)))
+            ; // Empty statement intentionally kept
         
         else if(get_the_tag(line, "type", 
                                    cfg->type, 
-                                   sizeof(cfg->type)));
+                                   sizeof(cfg->type)))
+            ; // Empty statement intentionally kept
             
 
         else if (get_the_tag(line, "hardware_id", buf,sizeof(buf)))
-            cfg->hardware_id = (float)atoi(buf);
+            cfg->hardware_id = (float)atof(buf);
     }
 
     fclose(fp);
     return 1;
 }
+
+#endif /* SIMPLEPARSER_H */
