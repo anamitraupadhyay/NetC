@@ -167,8 +167,12 @@ void getlocalip(char *buf, size_t size){
 }
 
 
-int build_response(const char *message_id, const char * relates_to_id, const char *message_id1,const char *local_ip,
-                    char *buf, size_t size, char *device_name);
+int build_response(const char *message_id ,const char *relates_to_id, 
+                   const char *message_id1,
+                   const char *manufacturer, const char *hardware,
+                   const char *location, const char *profile, const char *type,
+                   const char *local_ip,
+                   char *buf, size_t size, char *device_name);
 /* Build response*/
 
 int build_response(const char *message_id ,const char *relates_to_id, 
