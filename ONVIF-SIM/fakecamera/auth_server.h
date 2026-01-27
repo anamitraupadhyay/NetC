@@ -156,24 +156,12 @@ void *tcpserver(void *arg) {
           strncpy(cfg.hardware, "1.0", sizeof(cfg.hardware) - 1);
         }
         
-        // Build SOAP response using GET_DEVICE_INFO_TEMPLATE
-        char soap_body[BUFFER_SIZE];
+        // Build SOAP response with device information
         char firmware_str[32];
         snprintf(firmware_str, sizeof(firmware_str), "%.1f", cfg.firmware_version);
         
-        snprintf(soap_body, sizeof(soap_body),
-                 GET_DEVICE_INFO_TEMPLATE,
-                 request_message_id,     // RelatesTo (request MessageID)
-                 response_message_id,     // New MessageID for response
-                 cfg.manufacturer,        // Manufacturer
-                 cfg.model,               // Model
-                 firmware_str,            // FirmwareVersion
-                 cfg.serial_number,       // SerialNumber
-                 cfg.hardware);           // HardwareId
-        
-        // Add missing namespace declaration for addressing
-        char soap_with_namespace[BUFFER_SIZE];
-        snprintf(soap_with_namespace, sizeof(soap_with_namespace),
+        char soap_response[BUFFER_SIZE];
+        snprintf(soap_response, sizeof(soap_response),
                  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                  "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
                  "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
@@ -203,7 +191,7 @@ void *tcpserver(void *arg) {
                  "HTTP/1.1 200 OK\r\n"
                  "Content-Type: application/soap+xml; charset=utf-8\r\n"
                  "Content-Length: %zu\r\n\r\n%s",
-                 strlen(soap_with_namespace), soap_with_namespace);
+                 strlen(soap_response), soap_response);
         
         printf("[TCP] Sending GetDeviceInformation response\n");
         send(cs, response, strlen(response), 0);
