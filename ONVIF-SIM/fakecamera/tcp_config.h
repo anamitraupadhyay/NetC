@@ -29,9 +29,9 @@ const char *GET_DEVICE_INFO_TEMPLATE =
     "<tds:GetDeviceInformationResponse>"
     "<tds:Manufacturer>%s</tds:Manufacturer>"
     "<tds:Model>%s</tds:Model>"
-    "<tds:FirmwareVersion>%f</tds:FirmwareVersion>"
-    "<tds:SerialNumber>%d</tds:SerialNumber>"
-    "<tds:HardwareId>%f</tds:HardwareId>"
+    "<tds:FirmwareVersion>%s</tds:FirmwareVersion>"
+    "<tds:SerialNumber>%s</tds:SerialNumber>"
+    "<tds:HardwareId>%s</tds:HardwareId>"
     "</tds:GetDeviceInformationResponse>"
     "</s:Body>"
     "</s:Envelope>";

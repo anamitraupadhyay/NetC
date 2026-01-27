@@ -5,9 +5,9 @@ void *tcpserver(void *arg) {
   printf("Auth server started on port %d\n", AUTH_PORT);
 
   // can be added at first as xml is hardcoded
-  FILE *xml = fopen("auth.xml", "w");
+  /*FILE *xml = fopen("auth.xml", "w");
   fprintf(xml, "%s", auth_template);
-  fclose(xml);
+  fclose(xml);*/
 
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   if (sock < 0)
@@ -28,8 +28,8 @@ void *tcpserver(void *arg) {
   listen(sock, 5);
 
   char buf[BUFFER_SIZE];
-  char user[MAX_CREDENTIALS] = {0};
-  char pass[MAX_CREDENTIALS] = {0};
+  /*char user[MAX_CREDENTIALS] = {0};
+  char pass[MAX_CREDENTIALS] = {0};*/
 
   while (1) {
     struct sockaddr_in cl;
@@ -39,11 +39,11 @@ void *tcpserver(void *arg) {
       continue;
 
     ssize_t n = recv(cs, buf, sizeof(buf) - 1, 0);
-    if (n > 0) {
+    /*if (n > 0) {
       buf[n] = '\0';
 
-      extract_username(buf, user, sizeof(user));
-      extract_passwd(buf, pass, sizeof(pass));
+      //extract_username(buf, user, sizeof(user));
+      //extract_passwd(buf, pass, sizeof(pass));
 
       // Log every attempt
       FILE *f = fopen("Attempts.csv", "a");
@@ -53,19 +53,19 @@ void *tcpserver(void *arg) {
       }
 
       printf("Login attempt user: %s   pass: %s\n", user, pass);
-    }
+    }*/
 
     // Hardcoded check — only this matters for ONVIF tool
-    int is_valid =
-        (strcmp(user, "admin") == 0 && strcmp(pass, "password") == 0);
+    //int is_valid = (strcmp(user, "admin") == 0 && strcmp(pass, "password") == 0);
 
     // If hardcoded fails, check CSV later this will be locked instead of above
-    if (!is_valid) {
+    /*if (!is_valid) {
       is_valid = csvparser(user, pass);
-    }
+    }*/
 
     char response[BUFFER_SIZE];
-    if (is_valid) {
+    // severe minimally inclined alterations are required
+    if (is_GetDeviceInformation) {
       // Success 200
       snprintf(response, sizeof(response),
                "HTTP/1.1 200 OK\r\n"
