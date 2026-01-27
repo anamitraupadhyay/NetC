@@ -8,10 +8,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define DISCOVERY_PORT 3702
-#define MULTICAST_ADDR "239.255.255.250"
-#define CAMERA_HTTP_PORT 8080
-#define BUFFER_SIZE 65536
+//#define DISCOVERY_PORT 3702
+//#define MULTICAST_ADDR "239.255.255.250"
+//#define CAMERA_HTTP_PORT 8080
+//#define BUFFER_SIZE 65536
 #define AUTH_PORT 8080
 #define MAX_CREDENTIALS 1024
 
@@ -19,11 +19,12 @@
 const char *GET_DEVICE_INFO_TEMPLATE = 
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
     "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+    "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
     "<s:Header>"
     "<a:Action s:mustUnderstand=\"1\">http://www.onvif.org/ver10/device/wsdl/GetDeviceInformationResponse</a:Action>"
-    "<a:RelatesTo>%s</a:RelatesTo>"      /* 1. Matches Incoming MessageID */
-    "<a:MessageID>urn:uuid:%s</a:MessageID>" /* 2. New Random UUID */
+    "<a:RelatesTo>%s</a:RelatesTo>"
+    "<a:MessageID>urn:uuid:%s</a:MessageID>"
     "</s:Header>"
     "<s:Body>"
     "<tds:GetDeviceInformationResponse>"

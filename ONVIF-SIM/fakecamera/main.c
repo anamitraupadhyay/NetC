@@ -13,7 +13,7 @@ int main(void) {
   }
 
   if (pthread_create(&tcpserv, 
-    NULL, tcpserver, NULL) != 0) {
+    NULL, tcpserver1, NULL) != 0) {
     perror("pthread_create auth");
     pthread_cancel(t_disc);
     return 1;

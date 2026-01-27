@@ -33,7 +33,7 @@ static inline uint8_t get_the_tag(
     return 1;
 }
 
-int load_config(const char *filename, config *cfg)
+int inline load_config(const char *filename, config *cfg)
 {
     FILE *fp = fopen(filename, "r");
     if (!fp) return 0;
