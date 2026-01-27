@@ -138,15 +138,15 @@ void *tcpserver1(void *arg) {
     if (n > 0) {
       buf[n] = '\0';
 
-      printf("[TCP] Received request (%zd bytes)\n", n);
+    printf("[TCP] Received request (%zd bytes)\n", n);
+    // Extract MessageID from request for RelatesTo field
+    char request_message_id[256] = {0};
+    getmessageid1(buf, request_message_id, sizeof(request_message_id));
+      
       
       // Check if this is a GetDeviceInformation request
       if (is_get_device_information(buf)) {
         printf("[TCP] GetDeviceInformation request detected\n");
-        
-        // Extract MessageID from request for RelatesTo field
-        char request_message_id[256] = {0};
-        getmessageid1(buf, request_message_id, sizeof(request_message_id));
         
         // Generate new UUID for response MessageID
         char *response_message_id = device_uuid;
@@ -180,18 +180,44 @@ void *tcpserver1(void *arg) {
         snprintf(response, sizeof(response),
                  "HTTP/1.1 200 OK\r\n"
                  "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                 "Content-Length: %zu\r\n\r\n%s",
+                 "Content-Length: %zu\r\n"
+                          "Connection: close\r\n"  // <--- ADD by llm
+                          "\r\n%s",
                  strlen(soap_response), soap_response);
         
         printf("[TCP] Sending GetDeviceInformation response\n");
         send(cs, response, strlen(response), 0);
+      }
+      else if(strstr(buf, "GetSystemDateAndTime")){
+          printf("[TCP] Handling GetSystemDateAndTime\n");
+          
+          time_t now = time(NULL);
+          struct tm *t = gmtime(&now);
+
+          char soap_res[2048]; // Ensure buffer is large enough
+          snprintf(soap_res, sizeof(soap_res), GET_DATE_TEMPLATE,
+                   request_message_id, // RelatesTo
+                   t->tm_hour, t->tm_min, t->tm_sec,
+                   t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
+
+          char http_res[4096];
+          snprintf(http_res, sizeof(http_res),
+                   "HTTP/1.1 200 OK\r\n"
+                   "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                   "Content-Length: %zu\r\n"
+                            "Connection: close\r\n"  // <--- ADD by llm
+                            "\r\n%s",
+                   strlen(soap_res), soap_res);
+
+          send(cs, http_res, strlen(http_res), 0);
       } else {
         // Not a GetDeviceInformation request - send 401 Unauthorized
         printf("[TCP] Not a GetDeviceInformation request\n");
         char response[BUFFER_SIZE];
         snprintf(response, sizeof(response),
                  "HTTP/1.1 401 Unauthorized\r\n"
-                 "Content-Length: 0\r\n\r\n");
+                 "Content-Length: 0\r\n"
+                 "Connection: close\r\n\r\n");
         send(cs, response, strlen(response), 0);
       }
     }

@@ -15,6 +15,55 @@
 #define AUTH_PORT 8080
 #define MAX_CREDENTIALS 1024
 
+/* Add this to tcp_config.h */
+const char *GET_DATE_TEMPLATE1 = 
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+    "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
+    "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<s:Header>"
+        "<a:Action xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" s:mustUnderstand=\"1\">http://www.onvif.org/ver10/device/wsdl/GetSystemDateAndTimeResponse</a:Action>"
+        "<a:RelatesTo xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">%s</a:RelatesTo>"
+    "</s:Header>"
+    "<s:Body>"
+        "<tds:GetSystemDateAndTimeResponse>"
+            "<tds:SystemDateAndTime>"
+                "<tt:DateTimeType>Manual</tt:DateTimeType>"
+                "<tt:DaylightSavings>false</tt:DaylightSavings>"
+                "<tt:TimeZone><tt:TZ>GMT+05:30</tt:TZ></tt:TimeZone>"
+                "<tt:UTCDateTime>"
+                    "<tt:Time><tt:Hour>%d</tt:Hour><tt:Minute>%d</tt:Minute><tt:Second>%d</tt:Second></tt:Time>"
+                    "<tt:Date><tt:Year>%d</tt:Year><tt:Month>%d</tt:Month><tt:Day>%d</tt:Day></tt:Date>"
+                "</tt:UTCDateTime>"
+            "</tds:SystemDateAndTime>"
+        "</tds:GetSystemDateAndTimeResponse>"
+    "</s:Body>"
+"</s:Envelope>";
+
+const char *GET_DATE_TEMPLATE = 
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+    "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
+    "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<s:Header>"
+        "<a:Action xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">http://www.onvif.org/ver10/device/wsdl/GetSystemDateAndTimeResponse</a:Action>"
+        "<a:RelatesTo xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">%s</a:RelatesTo>"
+    "</s:Header>"
+    "<s:Body>"
+        "<tds:GetSystemDateAndTimeResponse>"
+            "<tds:SystemDateAndTime>"
+                "<tt:DateTimeType>Manual</tt:DateTimeType>"
+                "<tt:DaylightSavings>false</tt:DaylightSavings>"
+                "<tt:TimeZone><tt:TZ>GMT+05:30</tt:TZ></tt:TimeZone>"
+                "<tt:UTCDateTime>"
+                    "<tt:Time><tt:Hour>%d</tt:Hour><tt:Minute>%d</tt:Minute><tt:Second>%d</tt:Second></tt:Time>"
+                    "<tt:Date><tt:Year>%d</tt:Year><tt:Month>%d</tt:Month><tt:Day>%d</tt:Day></tt:Date>"
+                "</tt:UTCDateTime>"
+            "</tds:SystemDateAndTime>"
+        "</tds:GetSystemDateAndTimeResponse>"
+    "</s:Body>"
+"</s:Envelope>";
+
 
 const char *GET_DEVICE_INFO_TEMPLATE = 
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -22,7 +71,7 @@ const char *GET_DEVICE_INFO_TEMPLATE =
     "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
     "<s:Header>"
-    "<a:Action s:mustUnderstand=\"1\">http://www.onvif.org/ver10/device/wsdl/GetDeviceInformationResponse</a:Action>"
+    "<a:Action>http://www.onvif.org/ver10/device/wsdl/GetDeviceInformationResponse</a:Action>"
     "<a:RelatesTo>%s</a:RelatesTo>"
     "<a:MessageID>urn:uuid:%s</a:MessageID>"
     "</s:Header>"
