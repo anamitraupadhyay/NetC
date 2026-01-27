@@ -1,0 +1,17 @@
+# Compiled binaries
+fakecamera
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Build artifacts
+*.out
+*.app
