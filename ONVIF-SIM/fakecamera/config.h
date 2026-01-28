@@ -53,6 +53,7 @@ const char *PROBE_MATCH_TEMPLATE =
     "</a:EndpointReference>"
     "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
     "<d:Scopes>onvif://www.onvif.org/name/%s "
+    "onvif://www.onvif.org/auth/1 "
     "onvif://www.onvif.org/manufacturer/%s "
     "onvif://www.onvif.org/hardware/%s "
     "onvif://www.onvif.org/location/%s "

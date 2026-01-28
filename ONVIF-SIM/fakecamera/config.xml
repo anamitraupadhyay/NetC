@@ -15,6 +15,7 @@
         <profile>streaming</profile>
         <hardware>VMS</hardware>
         <location>India</location>
+        <auth>1</auth>
     </device>
     
     <!-- ONVIF Scopes -->
