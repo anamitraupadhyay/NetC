@@ -1,16 +1,173 @@
 #ifndef AUTH_SERVER_H
 #define AUTH_SERVER_H
 
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <time.h>
 #include "auth_utils.h"
-//#include "simpleparser.h"
 #include "dis_utils.h"
 
+// just blind trust for now
+int has_any_authentication(const char *request) {
+    // Check for HTTP Standard Auth
+    if (strstr(request, "Authorization: Digest") != NULL || 
+        strstr(request, "Authorization: Basic") != NULL) {
+        return 1;
+    }
+    // Check for ONVIF WS-Security (XML Body)
+    if (strstr(request, "wsse:Security") != NULL || 
+        strstr(request, "<Security") != NULL) {
+        return 1;
+    }
+    return 0;
+}
+
 void *tcpserver(void *arg) {
+    (void)arg;
+
+    config cfg1 = {0};
+    load_config("config.xml", &cfg1);
+    printf("ONVIF Server started on port %d\n", cfg1.server_port);
+
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) { perror("socket"); return NULL; }
+
+    int opt = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(cfg1.server_port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr))) {
+        perror("bind");
+        close(sock);
+        return NULL;
+    }
+    listen(sock, 5);
+
+    char buf[BUFFER_SIZE];
+
+    while (1) {
+        struct sockaddr_in cl;
+        socklen_t clen = sizeof(cl);
+        int cs = accept(sock, (struct sockaddr *)&cl, &clen);
+        if (cs < 0) continue;
+
+        memset(buf, 0, sizeof(buf));
+        ssize_t n = recv(cs, buf, sizeof(buf) - 1, 0);
+        if (n <= 0) { close(cs); continue; }
+        
+        buf[n] = '\0';
+        printf("\n[TCP] Received Request (%zd bytes)\n", n);
+
+        // messageID for RelatesTo
+        char request_message_id[256] = {0};
+        getmessageid1(buf, request_message_id, sizeof(request_message_id));
+
+
+        // CASE 1: GetSystemDateAndTime (Unauthenticated) DUH!
+        if (strstr(buf, "GetSystemDateAndTime")) {
+            printf("[TCP] Req: GetSystemDateAndTime -> ALLOWED\n");
+
+            time_t now = time(NULL);
+            struct tm *t = gmtime(&now);
+
+            char soap_res[2048];
+            snprintf(soap_res, sizeof(soap_res), GET_DATE_TEMPLATE,
+                     request_message_id, t->tm_hour, t->tm_min, t->tm_sec,
+                     t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
+
+            char http_res[4096];
+            snprintf(http_res, sizeof(http_res),
+                     "HTTP/1.1 200 OK\r\n"
+                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                     "Content-Length: %zu\r\n"
+                     "Connection: close\r\n\r\n%s",
+                     strlen(soap_res), soap_res);
+
+            send(cs, http_res, strlen(http_res), 0);
+        }
+
+        // CASE 2: GetDeviceInformation (Protected)
+        else if (strstr(buf, "GetDeviceInformation")) {
+            
+            if (has_any_authentication(buf)) {
+                // --- SUB-CASE 2A: HAS AUTH -> PASS (Blind Trust) ---
+                printf("[TCP] Req: GetDeviceInformation (Auth Present) -> ALLOWED\n");
+
+                config cfg2 = {0};
+                if (!load_config("config.xml", &cfg2)) {
+                     // Fallback defaults
+                     strncpy(cfg2.manufacturer, "Videonetics", sizeof(cfg2.manufacturer)-1);
+                     strncpy(cfg2.model, "Emulator_Cam", sizeof(cfg2.model)-1);
+                     cfg2.firmware_version = 1.0;
+                     strncpy(cfg2.serial_number, "VN12345", sizeof(cfg2.serial_number)-1);
+                     strncpy(cfg2.hardware, "1.0", sizeof(cfg2.hardware)-1);
+                }
+
+                char firmware_str[32];
+                snprintf(firmware_str, sizeof(firmware_str), "%.1f", cfg2.firmware_version);
+                
+                char soap_response[2048];
+                snprintf(soap_response, sizeof(soap_response),
+                         GET_DEVICE_INFO_TEMPLATE, request_message_id,
+                         device_uuid, cfg2.manufacturer, cfg2.model,
+                         firmware_str, cfg2.serial_number, cfg2.hardware);
+
+                char response[4096];
+                snprintf(response, sizeof(response),
+                         "HTTP/1.1 200 OK\r\n"
+                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                         "Content-Length: %zu\r\n"
+                         "Connection: close\r\n\r\n%s",
+                         strlen(soap_response), soap_response);
+
+                send(cs, response, strlen(response), 0);
+            } 
+            else {
+                // --- SUB-CASE 2B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
+                // We MUST send WWW-Authenticate or the client will stop trying.
+                printf("[TCP] Req: GetDeviceInformation (No Auth) -> CHALLENGE\n");
+                
+                // Random nonce generation
+                char nonce[33];
+                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", 
+                        rand(), rand(), rand(), rand());
+
+                char response[1024];
+                snprintf(response, sizeof(response),
+                         "HTTP/1.1 401 Unauthorized\r\n"
+                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
+                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                         "Content-Length: 0\r\n"
+                         "Connection: close\r\n\r\n",
+                         nonce);
+
+                send(cs, response, strlen(response), 0);
+            }
+        }
+
+        // CASE 3: Unknown Request -> 400 Bad Request
+        else {
+            printf("[TCP] Req: Unknown -> DENY\n");
+            char response[] = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            send(cs, response, strlen(response), 0);
+        }
+
+        close(cs);
+    }
+    close(sock);
+    return NULL;
+}
+
+void *tcpserver1(void *arg) {
   (void)arg;
 
   // load config though unoptimal way
