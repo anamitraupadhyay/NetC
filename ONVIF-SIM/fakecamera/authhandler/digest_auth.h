@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <openssl/md5.h>
-//#include "../config.h"
+#include "../config.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -18,6 +18,7 @@ inline void generate_nonce(char *nonce, size_t size){
                                           // then password from separate
   //
 }*/
+// obsolete this single flow will no longer be followed
 inline int get_check_password_fromcsv(const char *target_user,
                                       char *password,
                                       size_t size) {

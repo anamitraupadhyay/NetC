@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <time.h>
+
+#include "authhandler/digest_auth.h"
 #include "auth_utils.h"
 #include "dis_utils.h"
 
@@ -16,27 +18,36 @@
 // now some necessary altercations
 // integration of csvparser and also checking if that user exist or not
 int has_any_authentication(const char *request) {
-    // Check for HTTP Standard Auth
-    // main if stmt for now as http digest is the first target
-    if (strstr(request, "Authorization: Digest") != NULL || 
-        strstr(request, "Authorization: Basic") != NULL) {
-            //utilities i have bool csvparser but do i have user exist?
-            // no i have to implement it 
-            // but i do have extract user and password from req body
-            char user[64];
-            char pass[64];
+    
+    // Check for ONVIF WS-Security (XML Body)
+    if (strstr(request, "wsse:Security") != NULL || 
+        strstr(request, "<Security") != NULL) {
+            char user[64] = {0};// out user
+            char pass[64] = {0};// out pass
             //char passFromCsv[64]; // better impl this in separate function
             // change of plans already implemented the strcmp 
             extract_passwd(request , pass, sizeof(pass));
             extract_username(request, user, sizeof(user));
-            if(!csvparser(user, pass)) return 1;
+            if(csvparser(user, pass) == true) return 1;
             else return 0;
     }
-    // Check for ONVIF WS-Security (XML Body)
-    if (strstr(request, "wsse:Security") != NULL || 
-        strstr(request, "<Security") != NULL) {
-        return 1;
-    }
+    // Check for HTTP Standard Auth
+    // main if stmt for now as http digest is the first target
+    /*if (strstr(request, "Authorization: Digest") != NULL || 
+        strstr(request, "Authorization: Basic") != NULL) {
+            //utilities i have bool csvparser but do i have user exist?
+            // no i have to implement it 
+            // but i do have extract user and password from req body
+            char user[64] = {0};
+            char pass[64] = {0};
+            //char passFromCsv[64]; // better impl this in separate function
+            // change of plans already implemented the strcmp 
+            extract_passwd(request , pass, sizeof(pass));
+            extract_username(request, user, sizeof(user));
+            if(csvparser(user, pass) == true) return 1;
+            else return 0;
+    }*/
+    
     return 0;
 }
 
