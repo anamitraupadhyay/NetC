@@ -19,9 +19,11 @@ static inline bool is_get_device_information(const char *msg) {
     return false;
 }
 
-void extract_username(const char *msg, char *out, size_t out_size);
-void extract_username(const char *msg, char *out, size_t out_size) {
+void extract_usernamexml(const char *msg, char *out, size_t out_size);
+void extract_usernamexml(const char *msg, char *out, size_t out_size) {
   out[0] = '\0';
+  // the below line works for both <Username> and <wsse:Username>
+  // in extract_passwdigest kept the old way just for an idea
   const char *start = strstr(msg, "Username>");
   if (!start)
     return;
@@ -58,11 +60,14 @@ void extract_passwdigest(const char *msg, char *out, size_t out_size) {
   if (!end)
     return;
 
-  size_t len = end - start;
+  size_t len = (size_t)(end - start);
   if (len >= out_size)
     len = out_size - 1;
   memcpy(out, start, len);
   out[len] = '\0';
+
+  // learnt that passwd can be sent in plaintext the requirement is
+  // "Type=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText\""
 }
 
 bool csvparser(char *user, char *pass) {

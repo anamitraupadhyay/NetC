@@ -27,7 +27,7 @@ int has_any_authentication(const char *request) {
             //char passFromCsv[64]; // better impl this in separate function
             // change of plans already implemented the strcmp 
             extract_passwdigest(request , pass, sizeof(pass));
-            extract_username(request, user, sizeof(user));
+            extract_usernamexml(request, user, sizeof(user));
             if(csvparser(user, pass) == true) return 1;
             else return 0;
     }
