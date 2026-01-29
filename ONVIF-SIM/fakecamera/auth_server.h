@@ -33,20 +33,13 @@ int has_any_authentication(const char *request) {
     }
     // Check for HTTP Standard Auth
     // main if stmt for now as http digest is the first target
-    /*if (strstr(request, "Authorization: Digest") != NULL || 
+    if (strstr(request, "Authorization: Digest") != NULL || 
         strstr(request, "Authorization: Basic") != NULL) {
-            //utilities i have bool csvparser but do i have user exist?
+            // utilities i have bool csvparser but do i have user exist?
             // no i have to implement it 
             // but i do have extract user and password from req body
-            char user[64] = {0};
-            char pass[64] = {0};
-            //char passFromCsv[64]; // better impl this in separate function
-            // change of plans already implemented the strcmp 
-            extract_passwd(request , pass, sizeof(pass));
-            extract_username(request, user, sizeof(user));
-            if(csvparser(user, pass) == true) return 1;
-            else return 0;
-    }*/
+            return 1;
+    }
     
     return 0;
 }
@@ -123,7 +116,7 @@ void *tcpserver(void *arg) {
         else if (strstr(buf, "GetDeviceInformation")) {
             
             if (has_any_authentication(buf)) {
-                // --- SUB-CASE 2A: HAS AUTH -> PASS (Blind Trust) ---
+                // --- SUB-CASE 2A: HAS AUTH -> PASS (Blind Trust not now as using ws-username token) ---
                 printf("[TCP] Req: GetDeviceInformation (Auth Present) -> ALLOWED\n");
 
                 config cfg2 = {0};
