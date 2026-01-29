@@ -38,8 +38,8 @@ void extract_username(const char *msg, char *out, size_t out_size) {
   out[len] = '\0';
 }
 
-void extract_passwd(const char *msg, char *out, size_t out_size);
-void extract_passwd(const char *msg, char *out, size_t out_size) {
+void extract_passwdigest(const char *msg, char *out, size_t out_size);
+void extract_passwdigest(const char *msg, char *out, size_t out_size) {
   out[0] = '\0';
   const char *start = strstr(msg, "<wsse:Password");
   if (!start)
