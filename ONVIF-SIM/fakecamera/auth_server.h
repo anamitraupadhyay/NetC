@@ -11,7 +11,7 @@
 #include <time.h>
 
 #include "authhandler/digest_auth.h"
-#include "auth_utils.h"
+#include "authhandler/auth_utils.h"
 #include "dis_utils.h"
 
 // just blind trust for now
@@ -19,15 +19,38 @@
 // integration of csvparser and also checking if that user exist or not
 int has_any_authentication(const char *request) {
     
+    // 1. WS-UsernameToken (XML Body)
+        if (strstr(request, "wsse:Security") || strstr(request, "<Security")) {
+            printf("[Auth] Checking WS-UsernameToken...\n");
+            if (verify_ws_security(request)) {
+                printf("[Auth] WS-Security Verified!\n");
+                return 1;
+            }
+            printf("[Auth] WS-Security Failed.\n");
+        }
+    
+        // 2. HTTP Digest (Header)
+        if (strstr(request, "Authorization: Digest")) {
+            printf("[Auth] Checking HTTP Digest...\n");
+            // We assume POST for SOAP requests
+            if (verify_http_digest(request, "POST")) {
+                printf("[Auth] HTTP Digest Verified!\n");
+                return 1;
+            }
+            printf("[Auth] HTTP Digest Failed.\n");
+        }
+        
+        return 0;
+    
     // Check for ONVIF WS-Security (XML Body)
-    if (strstr(request, "wsse:Security") != NULL || 
+    /*if (strstr(request, "wsse:Security") != NULL || 
         strstr(request, "<Security") != NULL) {
             char user[64] = {0};// out user
             char pass[64] = {0};// out pass
             //char passFromCsv[64]; // better impl this in separate function
             // change of plans already implemented the strcmp 
-            extract_passwdigest(request , pass, sizeof(pass));
-            extract_usernamexml(request, user, sizeof(user));
+            extract_passwd(request , pass, sizeof(pass));
+            extract_username(request, user, sizeof(user));
             if(csvparser(user, pass) == true) return 1;
             else return 0;
     }
@@ -35,11 +58,18 @@ int has_any_authentication(const char *request) {
     // main if stmt for now as http digest is the first target
     if (strstr(request, "Authorization: Digest") != NULL || 
         strstr(request, "Authorization: Basic") != NULL) {
-            // utilities i have bool csvparser but do i have user exist?
+            //utilities i have bool csvparser but do i have user exist?
             // no i have to implement it 
             // but i do have extract user and password from req body
-            return 1;
-    }
+            char user[64] = {0};
+            char pass[64] = {0};
+            //char passFromCsv[64]; // better impl this in separate function
+            // change of plans already implemented the strcmp 
+            extract_passwd(request , pass, sizeof(pass));
+            extract_username(request, user, sizeof(user));
+            if(csvparser(user, pass) == true) return 1;
+            else return 0;
+    }*/
     
     return 0;
 }
@@ -116,7 +146,7 @@ void *tcpserver(void *arg) {
         else if (strstr(buf, "GetDeviceInformation")) {
             
             if (has_any_authentication(buf)) {
-                // --- SUB-CASE 2A: HAS AUTH -> PASS (Blind Trust not now as using ws-username token) ---
+                // --- SUB-CASE 2A: HAS AUTH -> PASS (Blind Trust) ---
                 printf("[TCP] Req: GetDeviceInformation (Auth Present) -> ALLOWED\n");
 
                 config cfg2 = {0};
