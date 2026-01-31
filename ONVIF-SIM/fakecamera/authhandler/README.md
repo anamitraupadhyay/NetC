@@ -129,6 +129,32 @@ OpenSSL is used strictly for hashing and Base64 in this module:
 
 These same steps work for any digest algorithm OpenSSL supports.
 
+### OpenSSL primer for C newcomers
+
+If you are new to OpenSSL, a helpful mental model is **\"EVP = generic crypto API\"**:
+
+- `EVP_MD_CTX` is a context that stores hash state.
+- `EVP_md5()` or `EVP_sha1()` selects the hash algorithm.
+- `EVP_DigestInit_ex`, `EVP_DigestUpdate`, and `EVP_DigestFinal_ex` are the standard trio for hashing.
+
+Minimal compile/link hints (depends on your build system):
+
+```
+cc ... -lssl -lcrypto
+```
+
+In this repository, the code only needs the **libcrypto** side (hashing + base64). The `#include <openssl/evp.h>` and `#include <openssl/bio.h>` headers bring in the needed APIs.
+
+#### Memory and lifecycle rules
+
+- Always `EVP_MD_CTX_new()` before hashing.
+- Always `EVP_MD_CTX_free()` when done.
+- Reuse the same context with `EVP_MD_CTX_reset()` if you want to hash multiple inputs, as `verify_http_digest()` does.
+
+#### Why MD5 and SHA1 here?
+
+ONVIF/WS-Security and HTTP Digest are legacy-compatible protocols that specify MD5 (Digest) and SHA1 (UsernameToken). Even though modern crypto prefers SHA-256+, the protocol must match the client specification to authenticate correctly.
+
 ## XML parsing considerations
 
 The parsing in `auth_utils.h` is string-based and intentionally minimal:
