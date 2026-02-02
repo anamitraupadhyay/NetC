@@ -146,7 +146,7 @@ bool create_user(const char *username, const char *password, userlevel level) {
     userCount++;
     
     // Append to CSV file
-    FILE *fp = fopen("/home/lts/NetC/ONVIF-SIM/fakecamera/authhandler/CredsWithLevel.csv", "a");
+    FILE *fp = fopen("authhandler/CredsWithLevel.csv", "a");
     if (!fp) {
         printf("[UserMgmt] Error: Cannot open CredsWithLevel.csv for appending\n");
         userCount--;  // Rollback
@@ -180,7 +180,7 @@ bool set_user(const char *username, const char *password, userlevel level) {
     myUsers[userIndex].level = level;
     
     // Rewrite entire CSV file
-    FILE *fp = fopen("/home/lts/NetC/ONVIF-SIM/fakecamera/authhandler/CredsWithLevel.csv", "w");
+    FILE *fp = fopen("authhandler/CredsWithLevel.csv", "w");
     if (!fp) {
         printf("[UserMgmt] Error: Cannot open CredsWithLevel.csv for writing\n");
         return false;
@@ -226,7 +226,7 @@ bool delete_user(const char *username) {
     userCount--;
     
     // Rewrite entire CSV file
-    FILE *fp = fopen("/home/lts/NetC/ONVIF-SIM/fakecamera/authhandler/CredsWithLevel.csv", "w");
+    FILE *fp = fopen("authhandler/CredsWithLevel.csv", "w");
     if (!fp) {
         printf("[UserMgmt] Error: Cannot open CredsWithLevel.csv for writing\n");
         return false;
