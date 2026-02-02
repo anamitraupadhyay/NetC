@@ -6,6 +6,13 @@
 #include <stdbool.h>
 #include "getuser.h"
 
+// Extended structure to store password temporarily
+typedef struct {
+    char username[64];
+    char password[64];
+    userlevel level;
+} UserWithPassword;
+
 // SOAP Response Templates
 const char *CREATE_USER_RESPONSE =
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -124,6 +131,54 @@ void extract_userlevel_from_request(const char *request, char *level, size_t siz
     level[len] = '\0';
 }
 
+// Load all users with passwords from CSV
+int load_users_with_passwords(UserWithPassword *users, int max_users) {
+    FILE *fp = fopen("authhandler/CredsWithLevel.csv", "r");
+    if (!fp) {
+        return 0;
+    }
+    
+    char line[256];
+    int count = 0;
+    fgets(line, sizeof(line), fp);  // Skip header
+    
+    while (fgets(line, sizeof(line), fp) && count < max_users) {
+        line[strcspn(line, "\r\n")] = 0;
+        char *username = strtok(line, ",");
+        char *password = strtok(NULL, ",");
+        char *level = strtok(NULL, ",\r\n");
+        
+        if (username && password && level) {
+            while (*level == ' ' || *level == '\t') level++;
+            strncpy(users[count].username, username, sizeof(users[count].username) - 1);
+            users[count].username[sizeof(users[count].username) - 1] = '\0';
+            strncpy(users[count].password, password, sizeof(users[count].password) - 1);
+            users[count].password[sizeof(users[count].password) - 1] = '\0';
+            users[count].level = StringToUserLevel(level);
+            count++;
+        }
+    }
+    
+    fclose(fp);
+    return count;
+}
+
+// Save all users with passwords to CSV
+bool save_users_to_csv(UserWithPassword *users, int count) {
+    FILE *fp = fopen("authhandler/CredsWithLevel.csv", "w");
+    if (!fp) {
+        printf("[UserMgmt] Error: Cannot open CredsWithLevel.csv for writing\n");
+        return false;
+    }
+    
+    fprintf(fp, "username,password,userlevel\n");
+    for (int i = 0; i < count; i++) {
+        fprintf(fp, "%s,%s,%s\n", users[i].username, users[i].password, UserLevelToString(users[i].level));
+    }
+    fclose(fp);
+    return true;
+}
+
 // Create a new user
 bool create_user(const char *username, const char *password, userlevel level) {
     // Check if user already exists
@@ -162,10 +217,14 @@ bool create_user(const char *username, const char *password, userlevel level) {
 
 // Set/update user information
 bool set_user(const char *username, const char *password, userlevel level) {
-    // Find user in memory
+    // Load all users with passwords
+    UserWithPassword users[MAX_USERS];
+    int count = load_users_with_passwords(users, MAX_USERS);
+    
+    // Find user
     int userIndex = -1;
-    for (int i = 0; i < userCount; i++) {
-        if (strcmp(myUsers[i].username, username) == 0) {
+    for (int i = 0; i < count; i++) {
+        if (strcmp(users[i].username, username) == 0) {
             userIndex = i;
             break;
         }
@@ -176,28 +235,25 @@ bool set_user(const char *username, const char *password, userlevel level) {
         return false;
     }
     
-    // Update in memory
-    myUsers[userIndex].level = level;
+    // Update user info
+    if (password[0] != '\0') {
+        strncpy(users[userIndex].password, password, sizeof(users[userIndex].password) - 1);
+        users[userIndex].password[sizeof(users[userIndex].password) - 1] = '\0';
+    }
+    users[userIndex].level = level;
     
-    // Rewrite entire CSV file
-    FILE *fp = fopen("authhandler/CredsWithLevel.csv", "w");
-    if (!fp) {
-        printf("[UserMgmt] Error: Cannot open CredsWithLevel.csv for writing\n");
+    // Save back to file
+    if (!save_users_to_csv(users, count)) {
         return false;
     }
     
-    fprintf(fp, "username,password,userlevel\n");
+    // Update in-memory user list (myUsers)
     for (int i = 0; i < userCount; i++) {
-        // Update password for the target user, keep others unchanged
-        if (i == userIndex && password[0] != '\0') {
-            fprintf(fp, "%s,%s,%s\n", myUsers[i].username, password, UserLevelToString(myUsers[i].level));
-        } else {
-            // For other users, we need to read the old password from the file
-            // For simplicity, just update the level and use "pass" as default
-            fprintf(fp, "%s,pass,%s\n", myUsers[i].username, UserLevelToString(myUsers[i].level));
+        if (strcmp(myUsers[i].username, username) == 0) {
+            myUsers[i].level = level;
+            break;
         }
     }
-    fclose(fp);
     
     printf("[UserMgmt] User '%s' updated successfully\n", username);
     return true;
@@ -205,10 +261,14 @@ bool set_user(const char *username, const char *password, userlevel level) {
 
 // Delete a user
 bool delete_user(const char *username) {
-    // Find user in memory
+    // Load all users with passwords
+    UserWithPassword users[MAX_USERS];
+    int count = load_users_with_passwords(users, MAX_USERS);
+    
+    // Find user to delete
     int userIndex = -1;
-    for (int i = 0; i < userCount; i++) {
-        if (strcmp(myUsers[i].username, username) == 0) {
+    for (int i = 0; i < count; i++) {
+        if (strcmp(users[i].username, username) == 0) {
             userIndex = i;
             break;
         }
@@ -219,24 +279,28 @@ bool delete_user(const char *username) {
         return false;
     }
     
-    // Remove from memory by shifting
-    for (int i = userIndex; i < userCount - 1; i++) {
-        myUsers[i] = myUsers[i + 1];
+    // Remove user by shifting array
+    for (int i = userIndex; i < count - 1; i++) {
+        users[i] = users[i + 1];
     }
-    userCount--;
+    count--;
     
-    // Rewrite entire CSV file
-    FILE *fp = fopen("authhandler/CredsWithLevel.csv", "w");
-    if (!fp) {
-        printf("[UserMgmt] Error: Cannot open CredsWithLevel.csv for writing\n");
+    // Save back to file
+    if (!save_users_to_csv(users, count)) {
         return false;
     }
     
-    fprintf(fp, "username,password,userlevel\n");
+    // Update in-memory user list (myUsers)
     for (int i = 0; i < userCount; i++) {
-        fprintf(fp, "%s,pass,%s\n", myUsers[i].username, UserLevelToString(myUsers[i].level));
+        if (strcmp(myUsers[i].username, username) == 0) {
+            // Shift users in memory
+            for (int j = i; j < userCount - 1; j++) {
+                myUsers[j] = myUsers[j + 1];
+            }
+            userCount--;
+            break;
+        }
     }
-    fclose(fp);
     
     printf("[UserMgmt] User '%s' deleted successfully\n", username);
     return true;
