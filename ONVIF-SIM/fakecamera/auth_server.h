@@ -77,6 +77,7 @@ int has_any_authentication(const char *request) {
 
 void *tcpserver(void *arg) {
     (void)arg;
+    loadUsers();
 
     config cfg1 = {0};
     load_config("config.xml", &cfg1);
@@ -204,11 +205,11 @@ void *tcpserver(void *arg) {
         // CASE 3: GetUser (3 way handshake as ususal)
         else if(strstr(buf, "GetUsers")){
           if(has_any_authentication(buf)) {
-            loadUsers();
+            
             // --- SUB-CASE 3A: HAS AUTH -> PASS ---
             printf("[TCP] Req: GetUsers (Auth Present) -> ALLOWED\n");
             char soap_response[8192];  // Large buffer for multiple users
-            GenerateGetUsersResponse(soap_response, sizeof(soap_response));
+            GenerateGetUsersResponse1(soap_response, sizeof(soap_response));
                     
             // <--- Build HTTP response
             char getuser_response[16384]; // a bit smaller size this time, have to manage this
