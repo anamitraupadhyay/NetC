@@ -14,7 +14,7 @@ typedef struct {
 } UserWithPassword;
 
 // SOAP Response Templates
-const char *CREATE_USER_RESPONSE =
+static const char *CREATE_USER_RESPONSE =
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
     "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" "
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">\n"
@@ -23,7 +23,7 @@ const char *CREATE_USER_RESPONSE =
     "  </soap:Body>\n"
     "</soap:Envelope>";
 
-const char *SET_USER_RESPONSE =
+static const char *SET_USER_RESPONSE =
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
     "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" "
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">\n"
@@ -32,7 +32,7 @@ const char *SET_USER_RESPONSE =
     "  </soap:Body>\n"
     "</soap:Envelope>";
 
-const char *DELETE_USER_RESPONSE =
+static const char *DELETE_USER_RESPONSE =
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
     "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" "
     "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">\n"
@@ -140,7 +140,10 @@ int load_users_with_passwords(UserWithPassword *users, int max_users) {
     
     char line[256];
     int count = 0;
-    fgets(line, sizeof(line), fp);  // Skip header
+    if (!fgets(line, sizeof(line), fp)) {  // Skip header - check return value
+        fclose(fp);
+        return 0;
+    }
     
     while (fgets(line, sizeof(line), fp) && count < max_users) {
         line[strcspn(line, "\r\n")] = 0;
@@ -195,8 +198,8 @@ bool create_user(const char *username, const char *password, userlevel level) {
     }
     
     // Add to memory
-    strncpy(myUsers[userCount].username, username, 63);
-    myUsers[userCount].username[63] = '\0';
+    strncpy(myUsers[userCount].username, username, sizeof(myUsers[userCount].username) - 1);
+    myUsers[userCount].username[sizeof(myUsers[userCount].username) - 1] = '\0';
     myUsers[userCount].level = level;
     userCount++;
     
