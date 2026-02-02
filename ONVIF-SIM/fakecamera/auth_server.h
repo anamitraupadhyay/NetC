@@ -13,6 +13,7 @@
 #include "authhandler/digest_auth.h"
 #include "authhandler/auth_utils.h"
 #include "authhandler/getuser.h"
+#include "authhandler/user_management.h"
 #include "dis_utils.h"
 
 // just blind trust for now
@@ -250,7 +251,147 @@ void *tcpserver(void *arg) {
           }
         }
 
-        // CASE 4: Unknown Request -> 400 Bad Request
+        // CASE 4: CreateUser (Admin only)
+        else if(strstr(buf, "CreateUsers")){
+          if(has_any_authentication(buf)) {
+            if(is_admin_user(buf)) {
+              printf("[TCP] Req: CreateUsers (Admin Auth Present) -> ALLOWED\n");
+              
+              char username[64] = {0}, password[64] = {0}, level_str[32] = {0};
+              extract_username_from_request(buf, username, sizeof(username));
+              extract_password_from_request(buf, password, sizeof(password));
+              extract_userlevel_from_request(buf, level_str, sizeof(level_str));
+              
+              userlevel level = StringToUserLevel(level_str);
+              
+              if(create_user(username, password, level)) {
+                char http_res[2048];
+                snprintf(http_res, sizeof(http_res),
+                         "HTTP/1.1 200 OK\r\n"
+                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                         "Content-Length: %zu\r\n"
+                         "Connection: close\r\n\r\n%s",
+                         strlen(CREATE_USER_RESPONSE), CREATE_USER_RESPONSE);
+                send(cs, http_res, strlen(http_res), 0);
+              } else {
+                char response[] = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                send(cs, response, strlen(response), 0);
+              }
+            } else {
+              printf("[TCP] Req: CreateUsers (Non-Admin) -> DENY\n");
+              char response[] = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+              send(cs, response, strlen(response), 0);
+            }
+          } else {
+            printf("[TCP] Req: CreateUsers (No Auth) -> CHALLENGE\n");
+            char nonce[33];
+            snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", 
+                    rand(), rand(), rand(), rand());
+            char response[1024];
+            snprintf(response, sizeof(response),
+                     "HTTP/1.1 401 Unauthorized\r\n"
+                     "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
+                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                     "Content-Length: 0\r\n"
+                     "Connection: close\r\n\r\n",
+                     nonce);
+            send(cs, response, strlen(response), 0);
+          }
+        }
+
+        // CASE 5: SetUser (Admin only)
+        else if(strstr(buf, "SetUser")){
+          if(has_any_authentication(buf)) {
+            if(is_admin_user(buf)) {
+              printf("[TCP] Req: SetUser (Admin Auth Present) -> ALLOWED\n");
+              
+              char username[64] = {0}, password[64] = {0}, level_str[32] = {0};
+              extract_username_from_request(buf, username, sizeof(username));
+              extract_password_from_request(buf, password, sizeof(password));
+              extract_userlevel_from_request(buf, level_str, sizeof(level_str));
+              
+              userlevel level = StringToUserLevel(level_str);
+              
+              if(set_user(username, password, level)) {
+                char http_res[2048];
+                snprintf(http_res, sizeof(http_res),
+                         "HTTP/1.1 200 OK\r\n"
+                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                         "Content-Length: %zu\r\n"
+                         "Connection: close\r\n\r\n%s",
+                         strlen(SET_USER_RESPONSE), SET_USER_RESPONSE);
+                send(cs, http_res, strlen(http_res), 0);
+              } else {
+                char response[] = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                send(cs, response, strlen(response), 0);
+              }
+            } else {
+              printf("[TCP] Req: SetUser (Non-Admin) -> DENY\n");
+              char response[] = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+              send(cs, response, strlen(response), 0);
+            }
+          } else {
+            printf("[TCP] Req: SetUser (No Auth) -> CHALLENGE\n");
+            char nonce[33];
+            snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", 
+                    rand(), rand(), rand(), rand());
+            char response[1024];
+            snprintf(response, sizeof(response),
+                     "HTTP/1.1 401 Unauthorized\r\n"
+                     "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
+                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                     "Content-Length: 0\r\n"
+                     "Connection: close\r\n\r\n",
+                     nonce);
+            send(cs, response, strlen(response), 0);
+          }
+        }
+
+        // CASE 6: DeleteUser (Admin only)
+        else if(strstr(buf, "DeleteUsers")){
+          if(has_any_authentication(buf)) {
+            if(is_admin_user(buf)) {
+              printf("[TCP] Req: DeleteUsers (Admin Auth Present) -> ALLOWED\n");
+              
+              char username[64] = {0};
+              extract_username_from_request(buf, username, sizeof(username));
+              
+              if(delete_user(username)) {
+                char http_res[2048];
+                snprintf(http_res, sizeof(http_res),
+                         "HTTP/1.1 200 OK\r\n"
+                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                         "Content-Length: %zu\r\n"
+                         "Connection: close\r\n\r\n%s",
+                         strlen(DELETE_USER_RESPONSE), DELETE_USER_RESPONSE);
+                send(cs, http_res, strlen(http_res), 0);
+              } else {
+                char response[] = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                send(cs, response, strlen(response), 0);
+              }
+            } else {
+              printf("[TCP] Req: DeleteUsers (Non-Admin) -> DENY\n");
+              char response[] = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+              send(cs, response, strlen(response), 0);
+            }
+          } else {
+            printf("[TCP] Req: DeleteUsers (No Auth) -> CHALLENGE\n");
+            char nonce[33];
+            snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", 
+                    rand(), rand(), rand(), rand());
+            char response[1024];
+            snprintf(response, sizeof(response),
+                     "HTTP/1.1 401 Unauthorized\r\n"
+                     "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
+                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                     "Content-Length: 0\r\n"
+                     "Connection: close\r\n\r\n",
+                     nonce);
+            send(cs, response, strlen(response), 0);
+          }
+        }
+
+        // CASE 7: Unknown Request -> 400 Bad Request
         else {
             printf("[TCP] Req: Unknown -> DENY\n");
             char response[] = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
