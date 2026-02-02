@@ -12,6 +12,7 @@
 
 #include "authhandler/digest_auth.h"
 #include "authhandler/auth_utils.h"
+#include "authhandler/getuser.h"
 #include "dis_utils.h"
 
 // just blind trust for now
@@ -200,8 +201,50 @@ void *tcpserver(void *arg) {
                 send(cs, response, strlen(response), 0);
             }
         }
+        // CASE 3: GetUser (3 way handshake as ususal)
+        else if(strstr(buf, "GetUsers")){
+          if(has_any_authentication(buf)) {
+            loadUsers();
+            // --- SUB-CASE 3A: HAS AUTH -> PASS ---
+            printf("[TCP] Req: GetUsers (Auth Present) -> ALLOWED\n");
+            char soap_response[8192];  // Large buffer for multiple users
+            GenerateGetUsersResponse(soap_response, sizeof(soap_response));
+                    
+            // <--- Build HTTP response
+            char getuser_response[16384]; // a bit smaller size this time, have to manage this
+            snprintf(getuser_response, sizeof(getuser_response),
+                     "HTTP/1.1 200 OK\r\n"
+                             "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                             "Content-Length: %zu\r\n"
+                             "Connection: close\r\n\r\n%s",
+                             strlen(soap_response), soap_response);
+                    
+            send(cs, getuser_response, strlen(getuser_response), 0);
+          }
+          else {
+            // --- SUB-CASE 3B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
+                // We MUST send WWW-Authenticate or the client will stop trying.
+                printf("[TCP] Req: GetUsers (No Auth) -> CHALLENGE\n");
+                
+                // Random nonce generation
+                char nonce[33];
+                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", 
+                        rand(), rand(), rand(), rand());
 
-        // CASE 3: Unknown Request -> 400 Bad Request
+                char response[1024];
+                snprintf(response, sizeof(response),
+                         "HTTP/1.1 401 Unauthorized\r\n"
+                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
+                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                         "Content-Length: 0\r\n"
+                         "Connection: close\r\n\r\n",
+                         nonce);
+
+                send(cs, response, strlen(response), 0);
+          }
+        }
+
+        // CASE 4: Unknown Request -> 400 Bad Request
         else {
             printf("[TCP] Req: Unknown -> DENY\n");
             char response[] = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
