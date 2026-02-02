@@ -50,7 +50,7 @@ static bool get_hdr(const char *req, const char *key,
 }
 
 
-bool verify_http_digest(
+bool verifyhttpdigest(
     const char *http_req,
     const char *stored_user,
     const char *stored_pass
@@ -67,13 +67,13 @@ bool verify_http_digest(
     if (strcmp(user, stored_user) != 0)
         return false;
 
-    // HA1 = MD5(user:realm:password) 
+    // HA1 = MD5(user:realm:password)
     char a1[256], ha1[33];
     snprintf(a1, sizeof(a1), "%s:%s:%s",
              user, realm, stored_pass);
     md5_hex(a1, ha1);
 
-    // HA2 = MD5(method:uri) 
+    // HA2 = MD5(method:uri)
     char a2[256], ha2[33];
     snprintf(a2, sizeof(a2), "%s:%s", method, uri);
     md5_hex(a2, ha2);
