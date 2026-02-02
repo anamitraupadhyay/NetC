@@ -244,6 +244,11 @@ void *tcpserver(void *arg) {
                 send(cs, response, strlen(response), 0);
           }
         }
+        else if (strstr(buf, "SetUser")) {
+          if(has_any_authentication(buf)){
+            //
+          }
+        }
 
         // CASE 4: Unknown Request -> 400 Bad Request
         else {
