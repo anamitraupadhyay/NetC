@@ -39,7 +39,7 @@ static int numofuserssentupdate = 0;
 // the design needs to be clever as to parse efficiently 
 static UserCredsupdate usersadd[] = {0};
 
-void parseSentUsers(const char *request){
+void parseSetUsers(const char *request){
     //const char *start = strstr(request,"<tds:CreateUsers>");
     //const char *end = strstr(request, "</tds:CreateUsers>");
     const char *movingCursor = request;// points to baseaddr
@@ -71,12 +71,41 @@ void parseSentUsers(const char *request){
     }
 }
 
-void delete_csv_line(){
-    //
-}
+// Parse <DeleteUsers> (List of <Username>)
+void parse_delete_users_xml(const char *request) {
+    numofuserssentupdate = 0;
+    const char *cursor = request;
+    
+    // ONVIF DeleteUsers usually looks like: <tds:Username>Name</tds:Username>
+    // Sometimes namespaced differently, we'll try generic match
+    while ((cursor = strstr(cursor, "Username>")) != NULL) {
+        if (numofuserssentupdate >= MAXUSERSADD) break;
+        
+        // Backtrack to find start bracket '<' to ensure it's a tag
+        const char *tagStart = cursor - 1;
+        while (*tagStart != '<' && tagStart > request) tagStart--;
 
-void update_csv_line(const char *request){
-    //
-    parseSentUsers(request);
+        // Check if it is a closing tag, if so skip
+        if (*(tagStart + 1) == '/') {
+            cursor += 9; // Skip "Username>"
+            continue;
+        }
+
+        const char *valStart = strchr(cursor, '>');
+        if (!valStart) break; 
+        valStart++; // Move past '>'
+
+        const char *valEnd = strstr(valStart, "</");
+        if (!valEnd) break;
+
+        long len = valEnd - valStart;
+        if (len >= MAXLENADD) len = MAXLENADD - 1;
+        
+        strncpy(usersadd[numofuserssentupdate].username, valStart, len);
+        usersadd[numofuserssentupdate].username[len] = '\0';
+        
+        numofuserssentupdate++;
+        cursor = valEnd + 2; 
+    }
 }
 #endif /*SET_DELETE_H */
