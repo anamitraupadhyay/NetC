@@ -1,11 +1,17 @@
+#ifndef SET_DELETE_H
+#define SET_DELETE_H
+
 #include <string.h>
 #include <stdio.h>
 // this file has all the update and delete csv line functions
 
+#define MAXUSERSADD 20
+#define MAXLENADD 512
+
 typedef struct {
-    char username[512];
-    char password[512];
-    char userLevel[512];
+    char username[MAXLENADD];
+    char password[MAXLENADD];
+    char userLevel[MAXLENADD];
 } UserCredsupdate;
 
 int extract_tag(const char *sourceCursor, const char *startTag, const char *endTag, char *destinationArray) {
@@ -20,7 +26,7 @@ int extract_tag(const char *sourceCursor, const char *startTag, const char *endT
     
     // Calculate length of the value
     long length = end - start;
-    if (length >= 512) length = 512 - 1; // Safety cap
+    if (length >= MAXLENADD) length = MAXLENADD - 1; // Safety cap
     
     strncpy(destinationArray, start, length);
     destinationArray[length] = '\0'; // Ensure null-termination
@@ -31,7 +37,7 @@ int extract_tag(const char *sourceCursor, const char *startTag, const char *endT
 static int numofuserssentupdate = 0;
 // need to find better logic later for num of users sent
 // the design needs to be clever as to parse efficiently 
-static UserCredsupdate usersadd[20] = {0};
+static UserCredsupdate usersadd[] = {0};
 
 void parseSentUsers(const char *request){
     //const char *start = strstr(request,"<tds:CreateUsers>");
@@ -42,7 +48,7 @@ void parseSentUsers(const char *request){
     // due to which its starting from start
     // do movingCursor as its getting updated each loop 
     while((movingCursor = strstr(/*request*/movingCursor, "<tds:User>")) != NULL){
-        if(numofuserssentupdate >= 20){
+        if(numofuserssentupdate >= MAXUSERSADD){
             printf("for now due to poor design choice the hardcoded buffer size %d overflows\n", numofuserssentupdate); break;
         }
         // experimenting with design choices here by using
@@ -73,3 +79,4 @@ void update_csv_line(const char *request){
     //
     parseSentUsers(request);
 }
+#endif /*SET_DELETE_H */
