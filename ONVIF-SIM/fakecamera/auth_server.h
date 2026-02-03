@@ -245,6 +245,7 @@ void *tcpserver(void *arg) {
                 send(cs, response, strlen(response), 0);
           }
         }
+        // CASE 4 : CreateUsers 
         else if (strstr(buf, "CreateUsers")) {
           if(has_any_authentication(buf)){
               printf("[TCP] Req: CreateUsers (Auth Present) -> ALLOWED\n");
@@ -277,7 +278,7 @@ void *tcpserver(void *arg) {
                      send(cs, http_response, len, 0);
           }
           else {
-            // --- SUB-CASE 3B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
+            // --- SUB-CASE 4B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
                 // We MUST send WWW-Authenticate or the client will stop trying.
                 printf("[TCP] Req: GetUsers (No Auth) -> CHALLENGE\n");
                 
@@ -299,7 +300,7 @@ void *tcpserver(void *arg) {
         }
     }
 
-        // CASE 4: Unknown Request -> 400 Bad Request
+        // CASE 5: Unknown Request -> 400 Bad Request
         else {
             printf("[TCP] Req: Unknown -> DENY\n");
             char response[] = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
