@@ -62,13 +62,13 @@ void base64_encode(const unsigned char *in, int in_len, char *out) {
 
 // --- Credential Lookup (FIXED) ---
 bool get_password_from_csv(const char *username, char *password_out, size_t size) {
-    FILE *fp = fopen("Credentials.csv", "r");
+    FILE *fp = fopen("CredsWithLevel.csv", "r");
     if (!fp) {
-        printf("[Auth] Error: Credentials.csv not found\n");
+        printf("[Auth] Error: CredsWithLevel.csv not found\n");
         return false;
     }
 
-    char line[256];
+    char line[512];
     while (fgets(line, sizeof(line), fp)) {
         // 1. Find the first comma to split User from Password
         char *first_comma = strchr(line, ',');

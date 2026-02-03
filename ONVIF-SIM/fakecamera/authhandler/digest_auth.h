@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <openssl/md5.h>
-#include "../config.h"
+//#include "../config.h"
 // below are important headers
 #include <stdio.h>
 #include <string.h>
