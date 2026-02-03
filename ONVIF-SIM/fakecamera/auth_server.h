@@ -290,8 +290,17 @@ void *tcpserver(void *arg) {
               //create users specific here
               // this also requires admin privilege
               char user[256] = {0};
-              extract_header_val(buf, "username", user, sizeof(user));
-              if(is_admin(buf, user)){
+              // Try lowercase first
+              extract_header_val1(buf, "username", user, sizeof(user));
+
+              // If empty, try Capitalized "Username"
+              if (user[0] == '\0') {
+                  extract_header_val(buf, "Username", user, sizeof(user));
+                  printf("extract_header_val1");
+              }
+
+              printf("[DEBUG] Extracted User: '%s'\n", user); // Debug print
+              if(user[0] != '\0' && is_admin(buf, user)){
                 appendusers(buf);
 
               // taken template

@@ -132,7 +132,72 @@ void extract_tag_value(const char *msg, const char *tag, char *out, size_t out_s
     trim_whitespace(out);
 }
 
+// Add to ONVIF-SIM/fakecamera/authhandler/auth_utils.h
+
 void extract_header_val(const char *msg, const char *key, char *out, size_t out_size) {
+    out[0] = '\0';
+    
+    // 1. Find the Authorization header specifically
+    const char *auth = strstr(msg, "Authorization: Digest");
+    if (!auth) auth = strstr(msg, "Authorization:Digest"); // Try without space
+    if (!auth) return;
+
+    // 2. Search for the key (e.g., "username") starting from the Auth header
+    const char *p = auth;
+    size_t key_len = strlen(key);
+    
+    while (1) {
+        // Find next occurrence of key
+        p = strstr(p, key);
+        if (!p) break;
+
+        // 3. Validation: Ensure this is the actual key, not a substring (e.g. "myusername")
+        // Check character before match: must be space, comma, newline, or start of auth string
+        char prev = (p == auth) ? ' ' : *(p-1);
+        if (prev != ' ' && prev != ',' && prev != '\t' && prev != '\n' && prev != '\r' && prev != '"') {
+             p += key_len;
+             continue;
+        }
+
+        // 4. Check for '=' after the key (handling spaces: username = "...")
+        const char *check = p + key_len;
+        while (*check == ' ') check++; // Skip spaces
+        
+        if (*check == '=') {
+            // FOUND IT! Now extract value
+            const char *val_start = check + 1;
+            while (*val_start == ' ') val_start++; // Skip spaces after =
+
+            // Handle Quoted Value
+            if (*val_start == '"') {
+                val_start++; // Skip opening quote
+                const char *val_end = strchr(val_start, '"');
+                if (val_end) {
+                    size_t len = val_end - val_start;
+                    if (len >= out_size) len = out_size - 1;
+                    memcpy(out, val_start, len);
+                    out[len] = '\0';
+                }
+            } 
+            // Handle Unquoted Value
+            else {
+                size_t i = 0;
+                while (val_start[i] != ',' && val_start[i] != '\r' && 
+                       val_start[i] != '\n' && val_start[i] != '\0' && 
+                       val_start[i] != ' ' && i < out_size - 1) {
+                    out[i] = val_start[i];
+                    i++;
+                }
+                out[i] = '\0';
+            }
+            return; // Done
+        }
+        
+        p += key_len; // Continue searching if this wasn't it
+    }
+}
+
+void extract_header_val1(const char *msg, const char *key, char *out, size_t out_size) {
     out[0] = '\0';
     const char *auth = strstr(msg, "Authorization: Digest");
     if (!auth) return;
@@ -219,7 +284,7 @@ bool verify_ws_security(const char *request) {
     return (strcmp(computed_digest, pass_digest) == 0);
 }
 
-int is_admin(const char *buf, const char *user/*, bool *is_admin_user*/){
+int is_admin1(const char *buf, const char *user/*, bool *is_admin_user*/){
     FILE *fp = fopen("CredsWithLevel.csv", "r"); //username,password,level
     char line[256];
     char username[64], password[64], level[16];
@@ -228,9 +293,33 @@ int is_admin(const char *buf, const char *user/*, bool *is_admin_user*/){
         // as those upper weird operators "%[^,],%[^,],%[^,\n]" were taken help need more context
         // not even confirmed from my side how it works
         printf("%s,%s,%s\n", username, password, level);
-        if(strcmp(username, user) == 0 && strcmp(level, "admin") == 0){
+        if(strcmp(username, user) == 0 && strcmp(level, "Administrator") == 0){
             fclose(fp);
             return 1;
+        }
+    }
+    fclose(fp);
+    return 0;
+}
+
+int is_admin(const char *buf, const char *user) {
+    FILE *fp = fopen("CredsWithLevel.csv", "r");
+    if (!fp) return 0;
+
+    char line[256];
+    char username[64], password[64], level[16];
+    
+    // Skip the header line (username,password,userlevel)
+    fgets(line, sizeof(line), fp); 
+
+    while(fgets(line, sizeof(line), fp)) {
+        // Corrected sscanf to handle potential spaces and the exact CSV format
+        if (sscanf(line, " %[^,],%[^,],%[^,\n\r]", username, password, level) == 3) {
+            // Match against "Administrator" as defined in your CSV
+            if(strcmp(username, user) == 0 && strcmp(level, "Administrator") == 0) {
+                fclose(fp);
+                return 1;
+            }
         }
     }
     fclose(fp);
