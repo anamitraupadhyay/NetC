@@ -14,17 +14,18 @@
 #include <openssl/buffer.h>
 
 #include "../tcp_config.h"
+//#include "getuser.h"
 
 // --- Helper: Trim Whitespace ---
 void trim_whitespace(char *str) {
     if (!str) return;
-    
+
     // Trim trailing
     size_t len = strlen(str);
     while (len > 0 && isspace((unsigned char)str[len - 1])) {
         str[--len] = '\0';
     }
-    
+
     // Trim leading (by moving memory)
     char *start = str;
     while (*start && isspace((unsigned char)*start)) {
@@ -72,15 +73,15 @@ bool get_password_from_csv(const char *username, char *password_out, size_t size
     while (fgets(line, sizeof(line), fp)) {
         // 1. Find the first comma to split User from Password
         char *first_comma = strchr(line, ',');
-        if (!first_comma) continue; 
-        
+        if (!first_comma) continue;
+
         // Terminate username string here
-        *first_comma = '\0'; 
-        
+        *first_comma = '\0';
+
         if (strcmp(line, username) == 0) {
             // 2. Password starts after the first comma
             char *pass_start = first_comma + 1;
-            
+
             // 3. Find end of password: next comma OR newline OR return char
             // strcspn returns the length of the prefix that does NOT contain any of the chars in the 2nd arg
             size_t pass_len = strcspn(pass_start, ",\r\n");
@@ -88,10 +89,10 @@ bool get_password_from_csv(const char *username, char *password_out, size_t size
 
             strncpy(password_out, pass_start, size - 1);
             password_out[size - 1] = '\0';
-            
+
             // 4. Clean up any accidental spaces
             trim_whitespace(password_out);
-            
+
             fclose(fp);
             return true;
         }
@@ -116,14 +117,14 @@ void extract_tag_value(const char *msg, const char *tag, char *out, size_t out_s
     out[0] = '\0';
     const char *start = strstr(msg, tag);
     if (!start) return;
-    
+
     start = strchr(start, '>');
     if (!start) return;
-    start++; 
-    
+    start++;
+
     const char *end = strstr(start, "</");
     if (!end) return;
-    
+
     size_t len = end - start;
     if (len >= out_size) len = out_size - 1;
     memcpy(out, start, len);
@@ -138,16 +139,16 @@ void extract_header_val(const char *msg, const char *key, char *out, size_t out_
 
     const char *p = auth;
     size_t key_len = strlen(key);
-    
+
     while ((p = strstr(p, key)) != NULL) {
         const char *check = p + key_len;
-        while (*check == ' ') check++; 
-        
+        while (*check == ' ') check++;
+
         if (*check != '=') { p++; continue; }
 
         char prev = (p == auth) ? ' ' : *(p-1);
         if (prev == ' ' || prev == ',' || prev == '\t' || prev == '\n' || prev == '\r') {
-            const char *val_start = check + 1; 
+            const char *val_start = check + 1;
             while (*val_start == ' ') val_start++;
 
             if (*val_start == '"') {
@@ -190,7 +191,7 @@ void compute_digest(const EVP_MD *type, const void *d1, size_t l1, const void *d
 
 bool verify_ws_security(const char *request) {
     char user[64]={0}, pass_digest[128]={0}, nonce_b64[128]={0}, created[64]={0}, stored_pass[64]={0};
-    
+
     extract_tag_value(request, "Username", user, sizeof(user));
     extract_tag_value(request, "Password", pass_digest, sizeof(pass_digest));
     extract_tag_value(request, "Nonce", nonce_b64, sizeof(nonce_b64));
@@ -201,7 +202,7 @@ bool verify_ws_security(const char *request) {
 
     unsigned char nonce_raw[128];
     int nonce_len = base64_decode(nonce_b64, strlen(nonce_b64), nonce_raw);
-    
+
     unsigned char sha1_buf[EVP_MAX_MD_SIZE];
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
     EVP_DigestInit_ex(ctx, EVP_sha1(), NULL);
@@ -216,6 +217,24 @@ bool verify_ws_security(const char *request) {
     base64_encode(sha1_buf, 20, computed_digest);
 
     return (strcmp(computed_digest, pass_digest) == 0);
+}
+
+int is_admin(const char *buf, const char *user/*, bool *is_admin_user*/){
+    FILE *fp = fopen("CredsWithLevel.csv", "r"); //username,password,level
+    char line[256];
+    char username[64], password[64], level[16];
+    while(fgets(line, sizeof(line), fp)){
+        sscanf(line, "%[^,],%[^,],%[^,\n]", username, password, level); // took help with these
+        // as those upper weird operators "%[^,],%[^,],%[^,\n]" were taken help need more context
+        // not even confirmed from my side how it works
+        printf("%s,%s,%s\n", username, password, level);
+        if(strcmp(username, user) == 0 && strcmp(level, "admin") == 0){
+            fclose(fp);
+            return 1;
+        }
+    }
+    fclose(fp);
+    return 0;
 }
 
 bool verify_http_digest(const char *request, const char *forced_method) {
@@ -233,7 +252,7 @@ bool verify_http_digest(const char *request, const char *forced_method) {
     extract_header_val(request, "algorithm", algo, sizeof(algo));
     extract_header_val(request, "nc", nc, sizeof(nc));
     if (!nc[0]) extract_header_val(request, "NC", nc, sizeof(nc));
-    
+
     extract_method(request, method, sizeof(method));
 
     if (!user[0] || !response[0]) return false;
@@ -252,12 +271,12 @@ bool verify_http_digest(const char *request, const char *forced_method) {
     EVP_DigestUpdate(ctx, ":", 1);
     EVP_DigestUpdate(ctx, stored_pass, strlen(stored_pass));
     EVP_DigestFinal_ex(ctx, md_buf, &len);
-    EVP_MD_CTX_reset(ctx); 
+    EVP_MD_CTX_reset(ctx);
 
     // Handle MD5-sess
     if (strcasecmp(algo, "MD5-sess") == 0) {
         EVP_DigestInit_ex(ctx, EVP_md5(), NULL);
-        EVP_DigestUpdate(ctx, md_buf, 16); 
+        EVP_DigestUpdate(ctx, md_buf, 16);
         EVP_DigestUpdate(ctx, ":", 1);
         EVP_DigestUpdate(ctx, nonce, strlen(nonce));
         EVP_DigestUpdate(ctx, ":", 1);
@@ -265,7 +284,7 @@ bool verify_http_digest(const char *request, const char *forced_method) {
         EVP_DigestFinal_ex(ctx, md_buf, &len);
         EVP_MD_CTX_reset(ctx);
     }
-    
+
     for(int i=0;i<16;i++) sprintf(&ha1_hex[i*2], "%02x", md_buf[i]);
 
     // --- Calculate HA2 = MD5(method:digestURI) ---
@@ -276,7 +295,7 @@ bool verify_http_digest(const char *request, const char *forced_method) {
     EVP_DigestUpdate(ctx, uri, strlen(uri));
     EVP_DigestFinal_ex(ctx, md_buf, &len);
     EVP_MD_CTX_reset(ctx);
-    
+
     for(int i=0;i<16;i++) sprintf(&ha2_hex[i*2], "%02x", md_buf[i]);
 
     // --- Calculate Response = MD5(HA1:nonce:nc:cnonce:qop:HA2) ---
@@ -285,7 +304,7 @@ bool verify_http_digest(const char *request, const char *forced_method) {
     EVP_DigestUpdate(ctx, ":", 1);
     EVP_DigestUpdate(ctx, nonce, strlen(nonce));
     EVP_DigestUpdate(ctx, ":", 1);
-    
+
     if (qop[0]) {
         EVP_DigestUpdate(ctx, nc, strlen(nc));
         EVP_DigestUpdate(ctx, ":", 1);
@@ -294,7 +313,7 @@ bool verify_http_digest(const char *request, const char *forced_method) {
         EVP_DigestUpdate(ctx, qop, strlen(qop));
         EVP_DigestUpdate(ctx, ":", 1);
     }
-    
+
     EVP_DigestUpdate(ctx, ha2_hex, 32);
     EVP_DigestFinal_ex(ctx, md_buf, &len);
     EVP_MD_CTX_free(ctx);
@@ -315,7 +334,7 @@ bool verify_http_digest(const char *request, const char *forced_method) {
     printf("  HA2: %s\n", ha2_hex);
     printf("  Computed: %s\n", resp_hex);
     printf("  Received: %s\n", response);
-    
+
     return false;
 }
 

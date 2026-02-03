@@ -20,7 +20,7 @@
 // now some necessary altercations
 // integration of csvparser and also checking if that user exist or not
 int has_any_authentication(const char *request) {
-    
+
     // 1. WS-UsernameToken (XML Body)
         if (strstr(request, "wsse:Security") || strstr(request, "<Security")) {
             printf("[Auth] Checking WS-UsernameToken...\n");
@@ -30,7 +30,7 @@ int has_any_authentication(const char *request) {
             }
             printf("[Auth] WS-Security Failed.\n");
         }
-    
+
         // 2. HTTP Digest (Header)
         if (strstr(request, "Authorization: Digest")) {
             printf("[Auth] Checking HTTP Digest...\n");
@@ -41,16 +41,16 @@ int has_any_authentication(const char *request) {
             }
             printf("[Auth] HTTP Digest Failed.\n");
         }
-        
+
         return 0;
-    
+
     // Check for ONVIF WS-Security (XML Body)
-    /*if (strstr(request, "wsse:Security") != NULL || 
+    /*if (strstr(request, "wsse:Security") != NULL ||
         strstr(request, "<Security") != NULL) {
             char user[64] = {0};// out user
             char pass[64] = {0};// out pass
             //char passFromCsv[64]; // better impl this in separate function
-            // change of plans already implemented the strcmp 
+            // change of plans already implemented the strcmp
             extract_passwd(request , pass, sizeof(pass));
             extract_username(request, user, sizeof(user));
             if(csvparser(user, pass) == true) return 1;
@@ -58,21 +58,21 @@ int has_any_authentication(const char *request) {
     }
     // Check for HTTP Standard Auth
     // main if stmt for now as http digest is the first target
-    if (strstr(request, "Authorization: Digest") != NULL || 
+    if (strstr(request, "Authorization: Digest") != NULL ||
         strstr(request, "Authorization: Basic") != NULL) {
             //utilities i have bool csvparser but do i have user exist?
-            // no i have to implement it 
+            // no i have to implement it
             // but i do have extract user and password from req body
             char user[64] = {0};
             char pass[64] = {0};
             //char passFromCsv[64]; // better impl this in separate function
-            // change of plans already implemented the strcmp 
+            // change of plans already implemented the strcmp
             extract_passwd(request , pass, sizeof(pass));
             extract_username(request, user, sizeof(user));
             if(csvparser(user, pass) == true) return 1;
             else return 0;
     }*/
-    
+
     return 0;
 }
 
@@ -113,7 +113,7 @@ void *tcpserver(void *arg) {
         memset(buf, 0, sizeof(buf));
         ssize_t n = recv(cs, buf, sizeof(buf) - 1, 0);
         if (n <= 0) { close(cs); continue; }
-        
+
         buf[n] = '\0';
         printf("\n[TCP] Received Request (%zd bytes)\n", n);
 
@@ -147,7 +147,7 @@ void *tcpserver(void *arg) {
 
         // CASE 2: GetDeviceInformation (Protected)
         else if (strstr(buf, "GetDeviceInformation")) {
-            
+
             if (has_any_authentication(buf)) {
                 // --- SUB-CASE 2A: HAS AUTH -> PASS (Blind Trust) ---
                 printf("[TCP] Req: GetDeviceInformation (Auth Present) -> ALLOWED\n");
@@ -164,7 +164,7 @@ void *tcpserver(void *arg) {
 
                 char firmware_str[32];
                 snprintf(firmware_str, sizeof(firmware_str), "%.1f", cfg2.firmware_version);
-                
+
                 char soap_response[2048];
                 snprintf(soap_response, sizeof(soap_response),
                          GET_DEVICE_INFO_TEMPLATE, request_message_id,
@@ -180,15 +180,15 @@ void *tcpserver(void *arg) {
                          strlen(soap_response), soap_response);
 
                 send(cs, response, strlen(response), 0);
-            } 
+            }
             else {
                 // --- SUB-CASE 2B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
                 // We MUST send WWW-Authenticate or the client will stop trying.
                 printf("[TCP] Req: GetDeviceInformation (No Auth) -> CHALLENGE\n");
-                
+
                 // Random nonce generation
                 char nonce[33];
-                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", 
+                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
                         rand(), rand(), rand(), rand());
 
                 char response[1024];
@@ -206,12 +206,45 @@ void *tcpserver(void *arg) {
         // CASE 3: GetUser (3 way handshake as ususal)
         else if(strstr(buf, "GetUsers")){
           if(has_any_authentication(buf)) {
-            
+              // check if its admin or not from CredWithLevel.csv
+              //static bool is_admin_user = false;
+              char user[256];
+              extract_header_val(buf, "username", user, sizeof(user));
+
+              if(is_admin(buf, user /*,is_admin_user*/)){ // how will i get this user
+
+            // if(is_admin(buf)){ ok just chnage the has any auth and later do enum
+                // --- SUB-CASE 3C: HAS AUTH + IS ADMIN -> PASS ---
+                printf("[TCP] Req: GetUsers (Auth Present + Admin) -> ALLOWED\n");
+                char soap_response[8192];  // Large buffer for multiple users
+                GenerateGetUsersResponse1(soap_response, sizeof(soap_response));
+
+                // <--- Build HTTP response
+                char getuser_response[16384]; // a bit smaller size this time, have to manage this
+                snprintf(getuser_response, sizeof(getuser_response),
+                         "HTTP/1.1 200 OK\r\n"
+                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                 "Content-Length: %zu\r\n"
+                                 "Connection: close\r\n\r\n%s",
+                                 strlen(soap_response), soap_response);
+
+                send(cs, getuser_response, strlen(getuser_response), 0);
+              }
+              else{//isadmin failure
+                  char getuser_response[16384]; // a bit smaller size this time, have to manage this
+                snprintf(getuser_response, sizeof(getuser_response),
+                         "HTTP/1.1 403 Forbidden\r\n"
+                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                 "Content-Length: 0\r\n"
+                                 "Connection: close\r\n\r\n");
+
+                send(cs, getuser_response, strlen(getuser_response), 0);
+              }
             // --- SUB-CASE 3A: HAS AUTH -> PASS ---
             printf("[TCP] Req: GetUsers (Auth Present) -> ALLOWED\n");
             char soap_response[8192];  // Large buffer for multiple users
             GenerateGetUsersResponse1(soap_response, sizeof(soap_response));
-                    
+
             // <--- Build HTTP response
             char getuser_response[16384]; // a bit smaller size this time, have to manage this
             snprintf(getuser_response, sizeof(getuser_response),
@@ -220,17 +253,17 @@ void *tcpserver(void *arg) {
                              "Content-Length: %zu\r\n"
                              "Connection: close\r\n\r\n%s",
                              strlen(soap_response), soap_response);
-                    
+
             send(cs, getuser_response, strlen(getuser_response), 0);
           }
           else {
             // --- SUB-CASE 3B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
                 // We MUST send WWW-Authenticate or the client will stop trying.
                 printf("[TCP] Req: GetUsers (No Auth) -> CHALLENGE\n");
-                
+
                 // Random nonce generation
                 char nonce[33];
-                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", 
+                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
                         rand(), rand(), rand(), rand());
 
                 char response[1024];
@@ -245,24 +278,24 @@ void *tcpserver(void *arg) {
                 send(cs, response, strlen(response), 0);
           }
         }
-        // CASE 4 : CreateUsers 
+        // CASE 4 : CreateUsers
         else if (strstr(buf, "CreateUsers")) {
           if(has_any_authentication(buf)){
               printf("[TCP] Req: CreateUsers (Auth Present) -> ALLOWED\n");
               char soap_response[8192];  // Large buffer for multiple users
               //create users specific here
               appendusers(buf);
-              
+
               // taken template
                      // ONVIF Spec: CreateUsersResponse is empty on success
-                     const char *soap_body = 
+                     const char *soap_body =
                          "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                          "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
                              "<soap:Body>"
                                  "<tds:CreateUsersResponse></tds:CreateUsersResponse>"
                              "</soap:Body>"
                          "</soap:Envelope>";
-                         
+
                      char http_response[4096]; // Buffer size should be sufficient for this
                      int len = snprintf(http_response, sizeof(http_response),
                                  "HTTP/1.1 200 OK\r\n"
@@ -271,9 +304,9 @@ void *tcpserver(void *arg) {
                                  "Connection: close\r\n"
                                  "\r\n"
                                  "%s",
-                                 strlen(soap_body), 
+                                 strlen(soap_body),
                                  soap_body);
-             
+
                      // 4. Send the response
                      send(cs, http_response, len, 0);
           }
@@ -281,10 +314,10 @@ void *tcpserver(void *arg) {
             // --- SUB-CASE 4B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
                 // We MUST send WWW-Authenticate or the client will stop trying.
                 printf("[TCP] Req: GetUsers (No Auth) -> CHALLENGE\n");
-                
+
                 // Random nonce generation
                 char nonce[33];
-                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", 
+                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
                         rand(), rand(), rand(), rand());
 
                 char response[1024];
@@ -390,7 +423,7 @@ void *tcpserver1(void *arg) {
         // CHECK: Does the request have the Security Header?
         if (strstr(buf, "wsse:Security") == NULL) {
           // --- SUB-CASE 2A: NO AUTH HEADER most needed to appear
-          // not "Not Authentication" also changed the 
+          // not "Not Authentication" also changed the
           printf("[TCP] Req: GetDeviceInformation (No Auth) -> DENY (Sending "
                  "401)\n");
 
@@ -501,16 +534,16 @@ void *tcpservernoauth(void *arg) {
     // Extract MessageID from request for RelatesTo field
     char request_message_id[256] = {0};
     getmessageid1(buf, request_message_id, sizeof(request_message_id));
-      
-      
+
+
       // Check if this is a GetDeviceInformation request
       if (is_get_device_information(buf)) {
         printf("[TCP] GetDeviceInformation request detected\n");
-        
+
         // Generate new UUID for response MessageID
         char *response_message_id = device_uuid;
         //generate_messageid1(response_message_id, sizeof(response_message_id));
-        
+
         // Load configuration from config.xml using simpleparser in main for now
         config cfg2 = {0};
         if (!load_config("config.xml", &cfg2)) {
@@ -522,18 +555,18 @@ void *tcpservernoauth(void *arg) {
           strncpy(cfg2.serial_number, "VN001", sizeof(cfg2.serial_number) - 1);
           strncpy(cfg2.hardware, "1.0", sizeof(cfg2.hardware) - 1);
         }
-        
+
         // Build SOAP response with device information
         // weird had to add later :> dumbass of mine
         char firmware_str[32];
         snprintf(firmware_str, sizeof(firmware_str), "%.1f", cfg2.firmware_version);
-        
+
         char soap_response[BUFFER_SIZE];
         snprintf(soap_response, sizeof(soap_response), GET_DEVICE_INFO_TEMPLATE,
                  request_message_id, response_message_id,
                  cfg2.manufacturer, cfg2.model, firmware_str,
                  cfg2.serial_number, cfg2.hardware);
-        
+
         // Build HTTP response
         char response[BUFFER_SIZE];
         snprintf(response, sizeof(response),
@@ -543,13 +576,13 @@ void *tcpservernoauth(void *arg) {
                           "Connection: close\r\n"  // <--- ADD by llm
                           "\r\n%s",
                  strlen(soap_response), soap_response);
-        
+
         printf("[TCP] Sending GetDeviceInformation response\n");
         send(cs, response, strlen(response), 0);
       }
       else if(strstr(buf, "GetSystemDateAndTime")){
           printf("[TCP] Handling GetSystemDateAndTime\n");
-          
+
           time_t now = time(NULL);
           struct tm *t = gmtime(&now);
 
