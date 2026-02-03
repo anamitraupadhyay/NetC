@@ -251,17 +251,30 @@ void *tcpserver(void *arg) {
               char soap_response[8192];  // Large buffer for multiple users
               //create users specific here
               appendusers(buf);
-                      
-              // <--- Build HTTP response
-              char getuser_response[16384]; // a bit smaller size this time, have to manage this
-              snprintf(getuser_response, sizeof(getuser_response),
-                            "HTTP/1.1 200 OK\r\n"
-                            "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                            "Content-Length: %zu\r\n"
-                            "Connection: close\r\n\r\n%s",
-                            strlen(soap_response), soap_response);
-                      
-              send(cs, getuser_response, strlen(getuser_response), 0);
+              
+              // taken template
+                     // ONVIF Spec: CreateUsersResponse is empty on success
+                     const char *soap_body = 
+                         "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                         "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                             "<soap:Body>"
+                                 "<tds:CreateUsersResponse></tds:CreateUsersResponse>"
+                             "</soap:Body>"
+                         "</soap:Envelope>";
+                         
+                     char http_response[4096]; // Buffer size should be sufficient for this
+                     int len = snprintf(http_response, sizeof(http_response),
+                                 "HTTP/1.1 200 OK\r\n"
+                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                 "Content-Length: %zu\r\n"
+                                 "Connection: close\r\n"
+                                 "\r\n"
+                                 "%s",
+                                 strlen(soap_body), 
+                                 soap_body);
+             
+                     // 4. Send the response
+                     send(cs, http_response, len, 0);
           }
           else {
             // --- SUB-CASE 3B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
