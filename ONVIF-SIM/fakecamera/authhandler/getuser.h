@@ -71,7 +71,7 @@ static int userCount = 0;
 static DeviceUser myUsers[MAX_USERS];
 
 void loadUsers() {
-    FILE *fp = fopen("/home/lts/NetC/ONVIF-SIM/fakecamera/authhandler/CredsWithLevel.csv", "r");
+    FILE *fp = fopen("CredsWithLevel.csv", "r");
     if (!fp) {
         perror("CredsWithLevels");
         return;
