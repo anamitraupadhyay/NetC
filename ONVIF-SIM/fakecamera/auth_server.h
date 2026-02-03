@@ -278,13 +278,21 @@ void *tcpserver(void *arg) {
                 send(cs, response, strlen(response), 0);
           }
         }
-        // CASE 4 : CreateUsers
+        // CASE 4 : SetUsers
+        else if(strstr(buf,"SetUsers")){}
+        // CASE 5 : DeleteUsers
+        else if(strstr(buf, "DeleteUsers")){}
+        // CASE 6 : CreateUsers
         else if (strstr(buf, "CreateUsers")) {
           if(has_any_authentication(buf)){
               printf("[TCP] Req: CreateUsers (Auth Present) -> ALLOWED\n");
               char soap_response[8192];  // Large buffer for multiple users
               //create users specific here
-              appendusers(buf);
+              // this also requires admin privilege
+              char user[256] = {0};
+              extract_header_val(buf, "username", user, sizeof(user));
+              if(is_admin(buf, user)){
+                appendusers(buf);
 
               // taken template
                      // ONVIF Spec: CreateUsersResponse is empty on success
@@ -309,6 +317,18 @@ void *tcpserver(void *arg) {
 
                      // 4. Send the response
                      send(cs, http_response, len, 0);
+              }
+              else {
+                  // User is not admin, send error response
+                  char getuser_response[16384]; // a bit smaller size this time, have to manage this
+                snprintf(getuser_response, sizeof(getuser_response),
+                         "HTTP/1.1 403 Forbidden\r\n"
+                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                 "Content-Length: 0\r\n"
+                                 "Connection: close\r\n\r\n");
+
+                send(cs, getuser_response, strlen(getuser_response), 0);
+              }
           }
           else {
             // --- SUB-CASE 4B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
