@@ -29,7 +29,10 @@ void parseSentUsers(const char *request){
     //const char *end = strstr(request, "</tds:CreateUsers>");
     const char *movingCursor = request;// points to baseaddr
     
-    while((movingCursor = strstr(request, "<tds:User>")) != NULL){
+    // as per llm "request" is passed in while loop
+    // due to which its starting from start
+    // do movingCursor as its getting updated each loop 
+    while((movingCursor = strstr(/*request*/movingCursor, "<tds:User>")) != NULL){
         if(numofuserssent >= MAX_USERS1){
             printf("for now due to poor design choice the hardcoded buffer size %d overflows\n", numofuserssent); break;
         }
