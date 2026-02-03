@@ -208,7 +208,7 @@ void *tcpserver(void *arg) {
           if(has_any_authentication(buf)) {
               // check if its admin or not from CredWithLevel.csv
               //static bool is_admin_user = false;
-              char user[256];
+              char user[256] = {0};
               extract_header_val(buf, "username", user, sizeof(user));
 
               if(is_admin(buf, user /*,is_admin_user*/)){ // how will i get this user
