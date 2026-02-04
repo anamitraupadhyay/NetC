@@ -347,8 +347,77 @@ void *tcpserver(void *arg) {
             }
     }
         // CASE 5 : DeleteUsers
-        else if(strstr(buf, "DeleteUsers")){
-        }
+        // CASE 5 : DeleteUsers
+        else if (strstr(buf, "DeleteUsers")) {
+                    if (has_any_authentication(buf)) {
+                        printf("[TCP] Req: DeleteUsers (Auth Present) -> ALLOWED\n");
+                        
+                        char user[256] = {0};
+                        // Extract the authenticated user to check for Admin privileges
+                        extract_header_val1(buf, "username", user, sizeof(user));
+                        if (user[0] == '\0') {
+                            extract_header_val(buf, "Username", user, sizeof(user));
+                        }
+        
+                        if (user[0] != '\0' && is_admin(buf, user)) {
+                            // 1. Parse the XML to find which users to delete
+                            parse_delete_users_xml(buf);
+        
+                            // 2. Iterate through the extracted usernames and delete them from the CSV
+                            for (int i = 0; i < numofuserssentdelete; i++) {
+                                deluserscsv(usersdelarray[i].username);
+                            }
+        
+                            // 3. Build the ONVIF-compliant SOAP Success Response
+                            const char *soap_body =
+                                "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                                "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" "
+                                "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                                    "<soap:Body>"
+                                        "<tds:DeleteUsersResponse></tds:DeleteUsersResponse>"
+                                    "</soap:Body>"
+                                "</soap:Envelope>";
+        
+                            char http_response[4096];
+                            int len = snprintf(http_response, sizeof(http_response),
+                                        "HTTP/1.1 200 OK\r\n"
+                                        "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                        "Content-Length: %zu\r\n"
+                                        "Connection: close\r\n"
+                                        "\r\n"
+                                        "%s",
+                                        strlen(soap_body),
+                                        soap_body);
+        
+                            send(cs, http_response, len, 0);
+                        }
+                        else {
+                            // Authenticated but not an Admin
+                            printf("[TCP] Req: DeleteUsers (Not Admin) -> FORBIDDEN\n");
+                            char response[] = "HTTP/1.1 403 Forbidden\r\n"
+                                              "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                              "Content-Length: 0\r\n"
+                                              "Connection: close\r\n\r\n";
+                            send(cs, response, strlen(response), 0);
+                        }
+                    }
+                    else {
+                        // No authentication provided -> Challenge the client
+                        printf("[TCP] Req: DeleteUsers (No Auth) -> CHALLENGE\n");
+                        char nonce[33];
+                        snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", rand(), rand(), rand(), rand());
+        
+                        char response[1024];
+                        snprintf(response, sizeof(response),
+                                 "HTTP/1.1 401 Unauthorized\r\n"
+                                 "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
+                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                 "Content-Length: 0\r\n"
+                                 "Connection: close\r\n\r\n",
+                                 nonce);
+                        send(cs, response, strlen(response), 0);
+                    }
+                }
         // CASE 6 : CreateUsers
         else if (strstr(buf, "CreateUsers")) {
           if(has_any_authentication(buf)){

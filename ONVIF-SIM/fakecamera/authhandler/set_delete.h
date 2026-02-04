@@ -89,20 +89,20 @@ void parse_delete_users_xml(const char *request) {
     while (cursor && numofuserssentdelete < MAXUSERSADD) {
 
         // start tag
-        const char *tagStart = strstr(cursor, "<tt:Username>");
+        const char *tagStart = strstr(cursor, "<tds:Username>");
         if (!tagStart) break;
 
         // Extract
-        if (extract_tag_setdel(cursor, "<tt:Username>", "</tt:Username>", usersdelarray[numofuserssentdelete].username)) {
+        if (extract_tag_setdel(cursor, "<tds:Username>", "</tds:Username>", usersdelarray[numofuserssentdelete].username)) {
             numofuserssentdelete++;
         }
 
         // mov cursor manually past the END tag, similar as above but at end
         // yup will see if it sticks or not
-        const char *tagEnd = strstr(tagStart, "</tt:Username>");
+        const char *tagEnd = strstr(tagStart, "</tds:Username>");
         if (!tagEnd) break;
 
-        cursor = tagEnd + strlen("</tt:Username>");
+        cursor = tagEnd + strlen("</tds:Username>");
     }
 }
 
