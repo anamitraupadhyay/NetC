@@ -109,13 +109,17 @@ void appendusers(const char *request,int accept) {
     char fail_reason[256];
     int validationpass = 1;
 
+    printf("before loop validity check");
     for(int i = 0; i< numofuserssent; i++){
-        if (validate_cred_edgecases(users[i].username, users[i].password, fail_reason)){
+        printf("loop ran of validity check");
+        if (!validate_cred_edgecases(users[i].username, users[i].password, fail_reason)){
             validationpass = 0; break;
+            printf("validpass is now 0");
         }
     }
+    printf("after loop validity check");
     
-    if(validationpass){
+    if(validationpass == 1){
     // 3. Add the users to CredsWithLevel.csv
     appendToCSV();
     // taken template
