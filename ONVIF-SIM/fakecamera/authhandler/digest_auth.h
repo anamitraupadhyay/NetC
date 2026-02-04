@@ -14,6 +14,39 @@
 #define MIN_PASS_LEN 4
 #define MAX_PASS_LEN 30
 
+//
+
+// Helper: Check if username exists in the database
+// Returns 1 if exists, 0 if not
+int user_exists_in_db(const char *check_username) {
+    FILE *fp = fopen("CredsWithLevel.csv", "r");
+    if (!fp) return 0;
+
+    char line[512];
+    char file_user[256];
+
+    while (fgets(line, sizeof(line), fp)) {
+        // username from : username,password,level
+        char *comma = strchr(line, ',');// 1st comma just for uname
+        if (comma) {
+            size_t len = comma - line;
+            if (len > 255) len = 255;
+            
+            strncpy(file_user, line, len);
+            file_user[len] = '\0';
+
+            // Check exact match
+            if (strcmp(file_user, check_username) == 0) {
+                fclose(fp);
+                return 1; // Found
+            }
+        }
+    }
+
+    fclose(fp);
+    return 0;
+}
+
 // Returns 1 if valid, 0 if invalid (and sets reason msg)
 int validate_cred_edgecases(const char *user, const char *pass, char *reason_out) {
     size_t u_len = strlen(user);
@@ -34,8 +67,11 @@ int validate_cred_edgecases(const char *user, const char *pass, char *reason_out
         strcpy(reason_out, "Password cannot be identical to Username");
         return 0;
     }
-    //if(){// load csv and check if username exist or not
-    //}
+    // load csv and check if username exist or not
+    if (user_exists_in_db(user)) {
+            strcpy(reason_out, "Username already exists");
+            return 0;
+        }
 
     return 1;
 }
