@@ -1,6 +1,7 @@
 username,password,userlevel
 admin,pass,Administrator
 user5,123,User
+TestAdmin1,123,Administrator
 TestOperator1,123,Operator
 TestOperator1,123,Operator
 TestOperator1,123,Operator

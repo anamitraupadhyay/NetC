@@ -364,7 +364,7 @@ void *tcpserver(void *arg) {
         // CASE 5 : DeleteUsers
         else if(strstr(buf, "DeleteUsers")){
             if(has_any_authentication(buf)){
-                printf("[TCP] Req: SetUsers (Auth Present) -> ALLOWED\n");
+                printf("[TCP] Req: DeleteUsers (Auth Present) -> ALLOWED\n");
                 char soap_response[8192];  // Large buffer for multiple users
                 //create users specific here
                 // this also requires admin privilege

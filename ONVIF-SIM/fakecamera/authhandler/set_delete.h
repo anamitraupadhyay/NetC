@@ -133,9 +133,18 @@ void setuserscsv(){
     // Read and process CSV line by line
     char line[5120];
     while (fgets(line, sizeof(line), fp)) {
-        // Modify line here if needed, or just copy
         fprintf(memstream, "%s", line);
     }
+    // forgot this step critical
+    for (int i = 0; i < numofuserssentupdate; i++) {
+        fprintf(memstream, "%s,%s,%s\n", 
+            usersadd[i].username, 
+            usersadd[i].password, 
+            usersadd[i].userLevel);
+    }
+
+    // Reset the counter
+    numofuserssentupdate = 0;
 
     fclose(fp);
     fclose(memstream);
