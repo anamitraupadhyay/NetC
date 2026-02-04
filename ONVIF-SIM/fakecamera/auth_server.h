@@ -241,21 +241,6 @@ void *tcpserver(void *arg) {
 
                 send(cs, getuser_response, strlen(getuser_response), 0);
               }
-            // --- SUB-CASE 3A: HAS AUTH -> PASS ---
-            printf("[TCP] Req: GetUsers (Auth Present) -> ALLOWED\n");
-            char soap_response[8192];  // Large buffer for multiple users
-            GenerateGetUsersResponse1(soap_response, sizeof(soap_response));
-
-            // <--- Build HTTP response
-            char getuser_response[16384]; // a bit smaller size this time, have to manage this
-            snprintf(getuser_response, sizeof(getuser_response),
-                     "HTTP/1.1 200 OK\r\n"
-                             "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                             "Content-Length: %zu\r\n"
-                             "Connection: close\r\n\r\n%s",
-                             strlen(soap_response), soap_response);
-
-            send(cs, getuser_response, strlen(getuser_response), 0);
           }
           else {
             // --- SUB-CASE 3B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
@@ -280,7 +265,7 @@ void *tcpserver(void *arg) {
           }
         }
         // CASE 4 : SetUsers
-        else if(strstr(buf,"SetUsers")){
+        else if(strstr(buf,"<tds:SetUser>")){
             if(has_any_authentication(buf)){
                 printf("[TCP] Req: SetUsers (Auth Present) -> ALLOWED\n");
                 char soap_response[8192];  // Large buffer for multiple users
