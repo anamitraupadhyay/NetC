@@ -8,6 +8,41 @@
 #include <stdbool.h>
 #include <openssl/evp.h>
 
+
+#define MIN_USER_LEN 4
+#define MAX_USER_LEN 30
+#define MIN_PASS_LEN 4
+#define MAX_PASS_LEN 30
+
+// Returns 1 if valid, 0 if invalid (and sets reason msg)
+int validate_cred_edgecases(const char *user, const char *pass, char *reason_out) {
+    size_t u_len = strlen(user);
+    size_t p_len = strlen(pass);
+
+    // Window Size Check
+    if (u_len < MIN_USER_LEN || u_len > MAX_USER_LEN) {
+        sprintf(reason_out, "Username length must be between %d and %d", MIN_USER_LEN, MAX_USER_LEN);
+        return 0;
+    }
+    if (p_len < MIN_PASS_LEN || p_len > MAX_PASS_LEN) {
+        sprintf(reason_out, "Password length must be between %d and %d", MIN_PASS_LEN, MAX_PASS_LEN);
+        return 0;
+    }
+
+    // Username Equal to Password Check
+    if (strcmp(user, pass) == 0) {
+        strcpy(reason_out, "Password cannot be identical to Username");
+        return 0;
+    }
+    //if(){// load csv and check if username exist or not
+    //}
+
+    return 1;
+}
+
+
+
+
 inline void generate_nonce(char *nonce, size_t size){
   snprintf(nonce, size, "%ld%d", time(NULL),rand());
 }

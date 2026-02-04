@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "authhandler/digest_auth.h"
+//#include "authhandler/digest_auth.h"
 #include "authhandler/auth_utils.h"
 #include "authhandler/getuser.h"
 #include "authhandler/createuser.h"
@@ -42,38 +42,6 @@ int has_any_authentication(const char *request) {
             }
             printf("[Auth] HTTP Digest Failed.\n");
         }
-
-        return 0;
-
-    // Check for ONVIF WS-Security (XML Body)
-    /*if (strstr(request, "wsse:Security") != NULL ||
-        strstr(request, "<Security") != NULL) {
-            char user[64] = {0};// out user
-            char pass[64] = {0};// out pass
-            //char passFromCsv[64]; // better impl this in separate function
-            // change of plans already implemented the strcmp
-            extract_passwd(request , pass, sizeof(pass));
-            extract_username(request, user, sizeof(user));
-            if(csvparser(user, pass) == true) return 1;
-            else return 0;
-    }
-    // Check for HTTP Standard Auth
-    // main if stmt for now as http digest is the first target
-    if (strstr(request, "Authorization: Digest") != NULL ||
-        strstr(request, "Authorization: Basic") != NULL) {
-            //utilities i have bool csvparser but do i have user exist?
-            // no i have to implement it
-            // but i do have extract user and password from req body
-            char user[64] = {0};
-            char pass[64] = {0};
-            //char passFromCsv[64]; // better impl this in separate function
-            // change of plans already implemented the strcmp
-            extract_passwd(request , pass, sizeof(pass));
-            extract_username(request, user, sizeof(user));
-            if(csvparser(user, pass) == true) return 1;
-            else return 0;
-    }*/
-
     return 0;
 }
 
@@ -437,42 +405,20 @@ void *tcpserver(void *arg) {
 
               printf("[DEBUG] Extracted User: '%s'\n", user); // Debug print
               if(user[0] != '\0' && is_admin(buf, user)){
-                appendusers(buf);
-
-              // taken template
-                     // ONVIF Spec: CreateUsersResponse is empty on success
-                     const char *soap_body =
-                         "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                         "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
-                             "<soap:Body>"
-                                 "<tds:CreateUsersResponse></tds:CreateUsersResponse>"
-                             "</soap:Body>"
-                         "</soap:Envelope>";
-
-                     char http_response[4096]; // Buffer size should be sufficient for this
-                     int len = snprintf(http_response, sizeof(http_response),
-                                 "HTTP/1.1 200 OK\r\n"
-                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                                 "Content-Length: %zu\r\n"
-                                 "Connection: close\r\n"
-                                 "\r\n"
-                                 "%s",
-                                 strlen(soap_body),
-                                 soap_body);
-
-                     // 4. Send the response
-                     send(cs, http_response, len, 0);
+                appendusers(buf,cs);
               }
               else {
                   // User is not admin, send error response
-                  char getuser_response[16384]; // a bit smaller size this time, have to manage this
-                snprintf(getuser_response, sizeof(getuser_response),
+                  //char getuser_response[16384]; // a bit smaller size this time, have to manage this
+                /*snprintf(getuser_response, sizeof(getuser_response),
                          "HTTP/1.1 403 Forbidden\r\n"
                                  "Content-Type: application/soap+xml; charset=utf-8\r\n"
                                  "Content-Length: 0\r\n"
                                  "Connection: close\r\n\r\n");
 
-                send(cs, getuser_response, strlen(getuser_response), 0);
+                send(cs, getuser_response, strlen(getuser_response), 0);*/
+
+                send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
               }
           }
           else {

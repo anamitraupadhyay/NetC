@@ -2,6 +2,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/socket.h>
+
+#include"digest_auth.h"
 
 #define MAX_USERS1 20
 #define MAXFIELD_LEN 512
@@ -12,13 +15,19 @@ typedef struct {
     char userLevel[MAXFIELD_LEN];
 } UserCreds;
 
+// Standard ONVIF Fault Subcodes
+#define FAULT_NOT_AUTHORIZED "ter:NotAuthorized"
+#define FAULT_INVALID_ARG    "ter:InvalidArgVal"
+#define FAULT_ACTION_NOT_SUP "ter:ActionNotSupported"
+
+
 static int numofuserssent = 0;
 // need to find better logic later for num of users sent
 // the design needs to be clever as to parse efficiently 
 static UserCreds users[MAX_USERS1] = {0};
 
 void parseSentUsers(const char *request);
-void appendusers(const char *request);
+void appendusers(const char *request, int accept);
 int extract_tag(const char *source, const char *startTag, 
     const char *endTag, char *destination);
 void appendToCSV();
@@ -57,16 +66,85 @@ void parseSentUsers(const char *request){
 }
 
 
-void appendusers(const char *request) {
+void send_soap_fault(int client_sock, const char *subcode, const char *reason) {
+    const char *fault_template =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+        "xmlns:ter=\"http://www.onvif.org/ver10/error\">"
+        "<s:Body>"
+            "<s:Fault>"
+                "<s:Code>"
+                    "<s:Value>s:Sender</s:Value>"
+                    "<s:Subcode><s:Value>%s</s:Value></s:Subcode>"
+                "</s:Code>"
+                "<s:Reason>"
+                    "<s:Text xml:lang=\"en\">%s</s:Text>"
+                "</s:Reason>"
+            "</s:Fault>"
+        "</s:Body>"
+        "</s:Envelope>";
+
+    char body[2048];
+    snprintf(body, sizeof(body), fault_template, subcode, reason);
+
+    char response[4096];
+    snprintf(response, sizeof(response),
+             "HTTP/1.1 500 Internal Server Error\r\n" // Faults are always 500
+             "Content-Type: application/soap+xml; charset=utf-8\r\n"
+             "Content-Length: %zu\r\n"
+             "Connection: close\r\n\r\n%s",
+             strlen(body), body);
+
+    send(client_sock, response, strlen(response), 0);
+}
+
+void appendusers(const char *request,int accept) {
     // 1. Reset count necessary its a global var
     // and the improved design hasnt been applied yet
     numofuserssent = 0; 
     
     // 2. Parse the XML
     parseSentUsers(request);
+
+    char fail_reason[256];
+    int validationpass = 1;
+
+    for(int i = 0; i< numofuserssent; i++){
+        if (validate_cred_edgecases(users[i].username, users[i].password, fail_reason)){
+            validationpass = 0; break;
+        }
+    }
     
+    if(validationpass){
     // 3. Add the users to CredsWithLevel.csv
     appendToCSV();
+    // taken template
+                     // ONVIF Spec: CreateUsersResponse is empty on success
+                     const char *soap_body =
+                         "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                         "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                             "<soap:Body>"
+                                 "<tds:CreateUsersResponse></tds:CreateUsersResponse>"
+                             "</soap:Body>"
+                         "</soap:Envelope>";
+
+                     char http_response[4096]; // Buffer size should be sufficient for this
+                     int len = snprintf(http_response, sizeof(http_response),
+                                 "HTTP/1.1 200 OK\r\n"
+                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                 "Content-Length: %zu\r\n"
+                                 "Connection: close\r\n"
+                                 "\r\n"
+                                 "%s",
+                                 strlen(soap_body),
+                                 soap_body);
+
+                     // 4. Send the response
+                     send(/*cs*/accept, http_response, len, 0);
+    }
+    else{
+        send_soap_fault(accept, FAULT_INVALID_ARG, fail_reason);
+    }
 }
 
 // ----------------
