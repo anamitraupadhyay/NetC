@@ -17,7 +17,11 @@ typedef struct {
     char userLevel[MAXLENADD];
 } UserCredsupdate;
 
-int extract_tag(const char *sourceCursor, const char *startTag, const char *endTag, char *destinationArray) {
+typedef struct {
+    char username[MAXLENADD];
+}usersdelarr;
+
+int extract_tag_setdel(const char *sourceCursor, const char *startTag, const char *endTag, char *destinationArray) {
     const char *start = strstr(sourceCursor, startTag);
     if (!start) return 0;
 
@@ -38,9 +42,11 @@ int extract_tag(const char *sourceCursor, const char *startTag, const char *endT
 }
 
 static int numofuserssentupdate = 0;
+static int numofuserssentdelete = 0;
 // need to find better logic later for num of users sent
 // the design needs to be clever as to parse efficiently
 static UserCredsupdate usersadd[] = {0};
+static usersdelarr usersdelarray[] = {0};
 
 void parseSetUsers(const char *request){
     //const char *start = strstr(request,"<tds:CreateUsers>");
@@ -61,13 +67,13 @@ void parseSetUsers(const char *request){
         if (!userEnd) break;
 
         // Extract Username
-        extract_tag(movingCursor, "<tt:Username>", "</tt:Username>", usersadd[numofuserssentupdate].username);
+        extract_tag_setdel(movingCursor, "<tt:Username>", "</tt:Username>", usersadd[numofuserssentupdate].username);
 
         // Extract Password
-        extract_tag(movingCursor, "<tt:Password>", "</tt:Password>", usersadd[numofuserssentupdate].password);
+        extract_tag_setdel(movingCursor, "<tt:Password>", "</tt:Password>", usersadd[numofuserssentupdate].password);
 
         // Extract UserLevel
-        extract_tag(movingCursor, "<tt:UserLevel>", "</tt:UserLevel>", usersadd[numofuserssentupdate].userLevel);
+        extract_tag_setdel(movingCursor, "<tt:UserLevel>", "</tt:UserLevel>", usersadd[numofuserssentupdate].userLevel);
         numofuserssentupdate++; // last marked point
         // below is pointer arithmetic to move the pointer to later
         movingCursor = userEnd + strlen("</tds:User>");// <-- ADDED
@@ -76,19 +82,19 @@ void parseSetUsers(const char *request){
 
 // Parse <DeleteUsers> (List of <Username>), a bit modified
 void parse_delete_users_xml(const char *request) {
-    numofuserssentupdate = 0;
+    numofuserssentdelete = 0;
     const char *cursor = request;
 
     // Loop for <tt:Username> so
-    while (cursor && numofuserssentupdate < MAXUSERSADD) {
+    while (cursor && numofuserssentdelete < MAXUSERSADD) {
 
         // start tag
         const char *tagStart = strstr(cursor, "<tt:Username>");
         if (!tagStart) break;
 
         // Extract
-        if (extract_tag(cursor, "<tt:Username>", "</tt:Username>", usersadd[numofuserssentupdate].username)) {
-            numofuserssentupdate++;
+        if (extract_tag_setdel(cursor, "<tt:Username>", "</tt:Username>", usersdelarray[numofuserssentdelete].username)) {
+            numofuserssentdelete++;
         }
 
         // mov cursor manually past the END tag, similar as above but at end
@@ -166,7 +172,8 @@ void setuserscsv(){
     free(buffer);
 }
 
-void setuserscsv(const char *username_to_delete) {
+// need to modify the whole impl logic to accomodate series of del users
+void deluserscsv(const char *username_todel) {
     FILE *fp = fopen("CredsWithLevel.csv", "r");
     if (!fp) {
         perror("CredsWithLevel.csv");
@@ -195,19 +202,19 @@ void setuserscsv(const char *username_to_delete) {
         // Parse username from line (assuming format: username,password,level)
         char username[256];
         if (sscanf(line, "%255[^,]", username) == 1) {
-            if (strcmp(username, username_to_delete) == 0) {
+            if (strcmp(username, username_todel) == 0) {
                 found = 1;
-                continue; // Skip this line (delete it)
+                continue; // Skip this user no copy
             }
         }
-        fprintf(memstream, "%s", line); // Keep all other lines
+        fprintf(memstream, "%s", line); // keep all other lines
     }
     
     fclose(fp);
     fclose(memstream);
     
     if (!found) {
-        printf("User '%s' not found\n", username_to_delete);
+        printf("User '%s' not found\n", username_todel);
         free(buffer);
         return;
     }
@@ -241,7 +248,7 @@ void setuserscsv(const char *username_to_delete) {
     }
     
     free(buffer);
-    printf("User '%s' deleted successfully\n", username_to_delete);
+    printf("User '%s' deleted successfully\n", username_todel);
 }
 
 #endif /*SET_DELETE_H */
