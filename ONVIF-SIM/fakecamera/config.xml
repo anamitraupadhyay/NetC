@@ -16,6 +16,8 @@
         <hardware>VMS</hardware>
         <location>India</location>
         <auth>1</auth>
+        <hostname>aupc</hostname>
+        <FromDHCP>false</FromDHCP>
     </device>
     
     <!-- ONVIF Scopes -->

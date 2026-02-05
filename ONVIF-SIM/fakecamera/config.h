@@ -23,6 +23,8 @@ struct datafromxml{
     char profile[64];
     char hardware[64];
     char location[64];
+    char hostname[64];
+    char fromdhcp[8];
 };
 /*datafromxml placing here was giving error 
 so instead declared beside struct*/
@@ -66,4 +68,18 @@ const char *PROBE_MATCH_TEMPLATE =
     "</s:Body>"
     "</s:Envelope>";
 
+    const char *GET_HOSTNAME_RESPONSE_TEMPLATE = 
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+                    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+            "<s:Body>"
+                "<tds:GetHostnameResponse>"
+                    "<tds:HostnameInformation>"
+                        "<tds:FromDHCP>%s</tds:FromDHCP>"
+                        "<tds:Name>%s</tds:Name>"
+                    "</tds:HostnameInformation>"
+                "</tds:GetHostnameResponse>"
+            "</s:Body>"
+        "</s:Envelope>";
+    
 #endif /* CONFIG_H */

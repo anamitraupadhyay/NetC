@@ -15,7 +15,9 @@
 #include "authhandler/getuser.h"
 #include "authhandler/createuser.h"
 #include "authhandler/set_delete.h"
+#include "config.h"
 #include "dis_utils.h"
+#include "simpleparser.h"
 
 // just blind trust for now
 // now some necessary altercations
@@ -112,6 +114,46 @@ void *tcpserver(void *arg) {
                      strlen(soap_res), soap_res);
 
             send(cs, http_res, strlen(http_res), 0);
+        }
+        else if(strstr(buf, "SetHostname")){
+            // admin priviledges is mandatory
+            if(has_any_authentication(buf)){
+                char user[256] = {0};
+                extract_header_val(buf, "username", user, sizeof(user));
+                
+                if(is_admin(buf, user)){
+                    // processing function
+                }
+                else{
+                    send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
+                }
+            }
+            else{
+                //
+            }
+        }
+        else if(strstr(buf, "GetHostname")){
+            // no admin required
+            config cfggethost = {0};
+            if(!load_config("config.xml", &cfggethost)){
+                // fallback default
+                strncpy(cfggethost.hostname, "defhostname", sizeof(cfggethost.hostname)-1);
+                strncpy(cfggethost.fromdhcp, "false", sizeof(cfggethost.fromdhcp)-1);
+            }
+            char soap_response[2048];
+            snprintf(soap_response, sizeof(soap_response),
+                     GET_HOSTNAME_RESPONSE_TEMPLATE, request_message_id, cfggethost.fromdhcp,cfggethost.hostname);
+
+            char response[4096];
+            snprintf(response, sizeof(response),
+                     "HTTP/1.1 200 OK\r\n"
+                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                     "Content-Length: %zu\r\n"
+                     "Connection: close\r\n\r\n%s",
+                     strlen(soap_response), soap_response);
+
+            send(cs, response, strlen(response), 0);
+            //
         }
 
         // CASE 2: GetDeviceInformation (Protected)
