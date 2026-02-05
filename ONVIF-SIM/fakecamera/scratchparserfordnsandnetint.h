@@ -4,17 +4,25 @@
 
 typedef enum{
     ipv4, ipv6
-}addrformat;
+}type;
 
-struct DNSManual{
-    addrformat addr;
-    uint32_t ipv4;
+typedef struct DNSManual{
+    type addr;
+
+    union {
+
+    uint32_t ipv4;//ugh useless due to union but still
     uint64_t ipv6;
-};
-typedef struct {
+
+    } ipaddr;
+
+}DNSManual;
+
+
+typedef struct DNS{
     bool FromDHCP;
     int DNSManualflag;
-    struct DNSManual *addrfmt;
+    DNSManual *addrfmt;
 }DNS;
 
 
