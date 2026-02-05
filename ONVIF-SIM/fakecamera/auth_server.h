@@ -125,10 +125,10 @@ void *tcpserver(void *arg) {
                     // processing function
                     // loadxml and edit there and success response
                     //sethostname exist in unistd.h, what? superuser is required
-                    char hostname[64];
+                    char hostnamearr[64];
                     //parsexml for hostname
-                    // 
-                    sethostnameinxml(hostname);
+                    extract_tag_value(buf, "hostname", hostnamearr, sizeof(hostnamearr));
+                    sethostnameinxml(hostnamearr);
                     const char *soap_body =
                         "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                         "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
