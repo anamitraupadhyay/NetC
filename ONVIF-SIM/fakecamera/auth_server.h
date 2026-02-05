@@ -398,7 +398,6 @@ void *tcpserver(void *arg) {
             }
     }
         // CASE 5 : DeleteUsers
-        // CASE 5 : DeleteUsers
         else if (strstr(buf, "DeleteUsers")) {
                     if (has_any_authentication(buf)) {
                         printf("[TCP] Req: DeleteUsers (Auth Present) -> ALLOWED\n");
@@ -491,15 +490,6 @@ void *tcpserver(void *arg) {
                 appendusers(buf,cs);
               }
               else {
-                  // User is not admin, send error response
-                  //char getuser_response[16384]; // a bit smaller size this time, have to manage this
-                /*snprintf(getuser_response, sizeof(getuser_response),
-                         "HTTP/1.1 403 Forbidden\r\n"
-                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                                 "Content-Length: 0\r\n"
-                                 "Connection: close\r\n\r\n");
-
-                send(cs, getuser_response, strlen(getuser_response), 0);*/
 
                 send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
               }
