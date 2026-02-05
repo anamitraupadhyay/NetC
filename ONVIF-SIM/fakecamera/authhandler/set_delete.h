@@ -278,34 +278,45 @@ void sethostnameinxml(const char *hostname) {
   }
 
   // Read header line first
-  char header[1024];
+  /*char header[1024];
   if (fgets(header, sizeof(header), fp)) {
     fprintf(memstream, "%s", header); // Always keep header
-  }
+  }*/
 
   // Process data lines, skipping the one to delete
   // auditions to maek it xml friendly
   char line[1024];
   //int found = 0;//no need
+  char tag[] = "hostname";
+  int updatedornot = 0;
   while (fgets(line, sizeof(line), fp)) {
     // Parse username from line (assuming format: username,password,level)
-    char username[256];
-    if (sscanf(line, "%255[^,]", username) == 1) {
-      if (strcmp(username, hostname) == 0) {
-        //found = 1;
-        continue; // Skip this user no copy
-      }
-    }
-    fprintf(memstream, "%s", line); // keep all other lines
+    // here tag
+    //char username[256];
+    char *start = strstr(line, "<hostname>");
+    char *end = strstr(line, "</hostname>");
+    char comparetag[64];
+    if (start && end) {
+        // Calculate indentation (whitespace before the tag)
+        // This ensures the XML stays pretty-printed
+        int indentation = (int)(start - line);//<-- ADDED by llm
+
+        // Write the indentation, the opening tag, the NEW hostname, and the closing tag
+        fprintf(memstream, "%.*s<hostname>%s</hostname>\n", indentation, line, hostname);
+        updatedornot = 1;
+        fprintf(memstream, "%s", line); // keep all other lines
+    
   }
+}
 
   fclose(fp);
   fclose(memstream);
 
-  if (!found) {
+  //not necessary at all
+  /*if (!found) {
     free(buffer);
     return;
-  }
+  }*/
 
   // Rest of same...
   FILE *fptmp = fopen("config.tmp", "w");
@@ -336,6 +347,11 @@ void sethostnameinxml(const char *hostname) {
   }
 
   free(buffer);
+  if (updatedornot) {
+      printf("{debug} updated to %s\n", hostname);
+  } else {
+      printf("Warning: <hostname> tag not found in config.xml\n");
+  }
 }
 
 
