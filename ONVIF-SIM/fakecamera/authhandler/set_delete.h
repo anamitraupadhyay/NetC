@@ -260,4 +260,83 @@ void deluserscsv(const char *username_todel) {
     printf("User '%s' deleted successfully\n", username_todel);
 }
 
+
+void sethostnameinxml(const char *hostname) {
+  FILE *fp = fopen("config.xml", "r");
+  if (!fp) {
+    perror("CredsWithLevel.csv");
+    return;
+  }
+
+  char *buffer = NULL;
+  size_t size = 0;
+  FILE *memstream = open_memstream(&buffer, &size);
+  if (!memstream) {
+    perror("open_memstream");
+    fclose(fp);
+    return;
+  }
+
+  // Read header line first
+  char header[1024];
+  if (fgets(header, sizeof(header), fp)) {
+    fprintf(memstream, "%s", header); // Always keep header
+  }
+
+  // Process data lines, skipping the one to delete
+  // auditions to maek it xml friendly
+  char line[1024];
+  //int found = 0;//no need
+  while (fgets(line, sizeof(line), fp)) {
+    // Parse username from line (assuming format: username,password,level)
+    char username[256];
+    if (sscanf(line, "%255[^,]", username) == 1) {
+      if (strcmp(username, hostname) == 0) {
+        //found = 1;
+        continue; // Skip this user no copy
+      }
+    }
+    fprintf(memstream, "%s", line); // keep all other lines
+  }
+
+  fclose(fp);
+  fclose(memstream);
+
+  if (!found) {
+    free(buffer);
+    return;
+  }
+
+  // Rest of same...
+  FILE *fptmp = fopen("config.tmp", "w");
+  if (!fptmp) {
+    perror("config.tmp");
+    free(buffer);
+    return;
+  }
+
+  if (fprintf(fptmp, "%s", buffer) < 0) {
+    perror("Failed to write to temp file");
+    fclose(fptmp);
+    unlink("config.tmp");
+    free(buffer);
+    return;
+  }
+
+  fflush(fptmp);
+  int fd = fileno(fptmp);
+  fsync(fd);
+  fclose(fptmp);
+
+  if (rename("config.tmp", "config.xml") != 0) {
+    perror("Failed to rename temp file");
+    unlink("config.tmp");
+    free(buffer);
+    return;
+  }
+
+  free(buffer);
+}
+
+
 #endif /*SET_DELETE_H */

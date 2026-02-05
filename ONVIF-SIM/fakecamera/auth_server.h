@@ -123,13 +123,49 @@ void *tcpserver(void *arg) {
                 
                 if(is_admin(buf, user)){
                     // processing function
+                    // loadxml and edit there and success response
+                    const char *soap_body =
+                        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                        "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                            "<soap:Body>"
+                                "<tds:SetHostnameResponse></tds:SetHostnameResponse>"
+                            "</soap:Body>"
+                        "</soap:Envelope>";
+
+                    char http_response[4096]; // Buffer size should be sufficient for this
+                    int len = snprintf(http_response, sizeof(http_response),
+                                "HTTP/1.1 200 OK\r\n"
+                                "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                "Content-Length: %zu\r\n"
+                                "Connection: close\r\n"
+                                "\r\n"
+                                "%s",
+                                strlen(soap_body),
+                                soap_body);
+
+                    // 4. Send the response
+                    send(cs, http_response, len, 0);
                 }
                 else{
                     send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
                 }
             }
             else{
-                //
+                // Random nonce generation
+                char nonce[33];
+                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
+                        rand(), rand(), rand(), rand());
+
+                char response[1024];
+                snprintf(response, sizeof(response),
+                         "HTTP/1.1 401 Unauthorized\r\n"
+                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
+                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                         "Content-Length: 0\r\n"
+                         "Connection: close\r\n\r\n",
+                         nonce);
+
+                send(cs, response, strlen(response), 0);
             }
         }
         else if(strstr(buf, "GetHostname")){
