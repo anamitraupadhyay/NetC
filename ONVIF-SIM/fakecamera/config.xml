@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <config>
     <!-- Network Configuration -->
-    <server_ip>172.16.4.9</server_ip>
+    <!-- <server_ip>172.16.4.9</server_ip> -->
     <server_port>7000</server_port>
-    
+    <fromdhcp></fromdhcp>
+    <searchdomain></searchdomain>
+    <ipv4></ipv4>
+    <ipv6></ipv6>
+
     <!-- Device Information -->
     <device>
         <manufacturer>Videonetics</manufacturer>

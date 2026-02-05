@@ -527,6 +527,11 @@ void *tcpserver(void *arg) {
         }
     }
 
+        else if(strstr(buf, "SetDNS")){}
+        else if(strstr(buf, "GetDNS")){}
+        else if(strstr(buf, "SetNetworkInterfaces")){}
+        else if(strstr(buf, "GetNetworkInterfaces")){}
+
         // CASE 5: Unknown Request -> 400 Bad Request
         else {
             printf("[TCP] Req: Unknown -> DENY\n");

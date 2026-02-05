@@ -304,9 +304,8 @@ void sethostnameinxml(const char *hostname) {
         // Write the indentation, the opening tag, the NEW hostname, and the closing tag
         fprintf(memstream, "%.*s<hostname>%s</hostname>\n", indentation, line, hostname);
         updatedornot = 1;
-        fprintf(memstream, "%s", line); // keep all other lines
-    
   }
+  fprintf(memstream, "%s", line); // keep all other lines
 }
 
   fclose(fp);
@@ -354,5 +353,71 @@ void sethostnameinxml(const char *hostname) {
   }
 }
 
+
+void setdnsinxml(const char *thattobeset, 
+    const char *thetagtolookunderopen, const char *thetagtolookunderclose) {
+  FILE *fp = fopen("config.xml", "r");
+  if (!fp) {
+    perror("CredsWithLevel.csv");
+    return;
+  }
+
+  char *buffer = NULL;
+  size_t size = 0;
+  FILE *memstream = open_memstream(&buffer, &size);
+  if (!memstream) {
+    perror("open_memstream");
+    fclose(fp);
+    return;
+  }
+  
+  char line[1024];
+  while (fgets(line, sizeof(line), fp)) {
+    char *start = strstr(line, thetagtolookunderopen/*"<hostname>"*/);
+    char *end = strstr(line, thetagtolookunderclose/*"</hostname>"*/);
+    if (start && end) {
+        // Calculate indentation (whitespace before the tag)
+        // This ensures the XML stays pretty-printed
+        int indentation = (int)(start - line);//<-- ADDED by llm
+
+        // Write the indentation, the opening tag, the NEW hostname, and the closing tag
+        fprintf(memstream, "%.*s%s%s%s\n", indentation, line, thetagtolookunderopen/*start*/, thattobeset, thetagtolookunderclose/*end*/);
+  }
+  fprintf(memstream, "%s", line); // keep all other lines
+}
+
+  fclose(fp);
+  fclose(memstream);
+
+  // Rest of same...
+  FILE *fptmp = fopen("config.tmp", "w");
+  if (!fptmp) {
+    perror("config.tmp");
+    free(buffer);
+    return;
+  }
+
+  if (fprintf(fptmp, "%s", buffer) < 0) {
+    perror("Failed to write to temp file");
+    fclose(fptmp);
+    unlink("config.tmp");
+    free(buffer);
+    return;
+  }
+
+  fflush(fptmp);
+  int fd = fileno(fptmp);
+  fsync(fd);
+  fclose(fptmp);
+
+  if (rename("config.tmp", "config.xml") != 0) {
+    perror("Failed to rename temp file");
+    unlink("config.tmp");
+    free(buffer);
+    return;
+  }
+
+  free(buffer);
+}
 
 #endif /*SET_DELETE_H */
