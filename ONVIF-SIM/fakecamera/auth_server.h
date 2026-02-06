@@ -64,7 +64,8 @@ void *tcpserver(void *arg) {
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(cfg1.server_port);
-    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_addr.s_addr = INADDR_ANY;// here about setting the ip?
+    // need to change the config loading and what about affect of the dhcp
 
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr))) {
         perror("bind");
@@ -517,7 +518,43 @@ void *tcpserver(void *arg) {
         }
     }
 
-        else if(strstr(buf, "SetDNS")){}
+        else if(strstr(buf, "SetDNS")){
+            // its kinda ready but study of acttual pipeline
+            // effect is yet to be studied
+            if(has_any_authentication(buf)){
+                char user[256];
+                extract_header_val(buf, "username", user, sizeof(user));
+                if(is_admin(buf, user)){
+                    //actual operations with send success
+                    char thattobeset[256];
+                    extract_tag_value(buf, "FromDHCP", thattobeset, sizeof(thattobeset)); // mandatory
+                    char tagopen[] = "<fromdhcp>";
+                    char tagclose[] = "</fromdhcp>";
+                    setdnsinxml(thattobeset, tagopen, tagclose);
+                    // for optional handling need a whole checkflow
+                    optionalhandlingsdns(buf);
+                }
+                else{// soapfault - try with admin priviledges}
+                    send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
+                }
+            }
+            else{
+                char nonce[33];
+                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
+                        rand(), rand(), rand(), rand());
+
+                char response[1024];
+                snprintf(response, sizeof(response),
+                         "HTTP/1.1 401 Unauthorized\r\n"
+                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
+                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                         "Content-Length: 0\r\n"
+                         "Connection: close\r\n\r\n",
+                         nonce);
+
+                send(cs, response, strlen(response), 0);
+            }
+        }
         else if(strstr(buf, "GetDNS")){}
         else if(strstr(buf, "SetNetworkInterfaces")){}
         else if(strstr(buf, "GetNetworkInterfaces")){}

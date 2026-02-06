@@ -1,3 +1,5 @@
+// future modular template
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -28,8 +30,10 @@ typedef struct DNS{
 
 void extract_fields_netdns(const char *buf){
     FILE *fp = fopen("config.xml", "r");
+    fclose(fp);
 }
 
 void extract_fields_netint(const char *buf){
     FILE *fp = fopen("config.xml", "r");
+    fclose(fp);
 }

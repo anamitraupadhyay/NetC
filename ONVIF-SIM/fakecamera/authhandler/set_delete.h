@@ -420,4 +420,7 @@ void setdnsinxml(const char *thattobeset,
   free(buffer);
 }
 
+
+
+
 #endif /*SET_DELETE_H */

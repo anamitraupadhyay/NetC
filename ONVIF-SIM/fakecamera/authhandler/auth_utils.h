@@ -14,6 +14,7 @@
 #include <openssl/buffer.h>
 
 #include "../tcp_config.h"
+#include "set_delete.h"
 //#include "getuser.h"
 
 // --- Helper: Trim Whitespace ---
@@ -130,6 +131,39 @@ void extract_tag_value(const char *msg, const char *tag, char *out, size_t out_s
     memcpy(out, start, len);
     out[len] = '\0';
     trim_whitespace(out);
+}
+
+void optionalhandlingsdns(const char *buffer){
+    //control flows to check 
+    // 1. search domain tag
+    // 2. dnsmanual tag and ip is confirmed
+    if(strstr(buffer, "tds:SearchDomain")){
+        char searchdomain[256];
+        extract_tag_value(buffer, "tds:SearchDomain", searchdomain, sizeof(searchdomain)); 
+        char tagopen[] = "<searchdomain>";
+        char tagclose[] = "</searchdomain>";
+        setdnsinxml(searchdomain, tagopen, tagclose);
+    }
+    else if(strstr(buffer, "tds:DNSManual") /*&& strstr(buffer, "tt:Type")*/){
+        char type[8];
+        extract_tag_value(buffer, "tt:Type", type, sizeof(type));
+        char actualaddr[64] = {0};
+        if(strcmp(type, "ipv4")){
+            // oops did a mistake need to extract the value form the tag
+            char tagopenipv4[] = "<type>";
+            char tagcloseipv4[] = "</type>";
+            setdnsinxml(type, tagopenipv4, tagcloseipv4);
+            extract_tag_value(buffer, "tt:IPv4Address", actualaddr, sizeof(actualaddr));
+            setdnsinxml(actualaddr, "<addr>", "</addr>");
+        }
+        else if(strcmp(type, "ipv6")){
+            char tagopenipv6[] = "<type>";
+            char tagcloseipv6[] = "</type>";
+            setdnsinxml(type, tagopenipv6, tagcloseipv6);
+            extract_tag_value(buffer, "tt:IPv6Address", actualaddr, sizeof(actualaddr));
+            setdnsinxml(actualaddr, "<addr>", "</addr>");
+        }
+    }
 }
 
 // Add to ONVIF-SIM/fakecamera/authhandler/auth_utils.h
