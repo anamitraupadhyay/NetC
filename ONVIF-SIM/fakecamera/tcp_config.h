@@ -136,3 +136,23 @@ const char *GET_SERVICES_TEMPLATE =
     "</tds:GetServicesResponse>"
     "</s:Body>"
     "</s:Envelope>";
+
+// %s=FromDHCP %s=SearchDomain %s=Type(IPv4/IPv6) %s=DNSaddr
+const char *GET_DNS_RESPONSE_TEMPLATE = 
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+    "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
+    "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<s:Body>"
+        "<tds:GetDNSResponse>"
+            "<tds:DNSInformation>"
+                "<tt:FromDHCP>%s</tt:FromDHCP>"
+                "<tt:SearchDomain>%s</tt:SearchDomain>"
+                "<tt:DNSManual>"
+                    "<tt:Type>%s</tt:Type>"
+                    "<tt:IPv4Address>%s</tt:IPv4Address>"
+                "</tt:DNSManual>"
+            "</tds:DNSInformation>"
+        "</tds:GetDNSResponse>"
+    "</s:Body>"
+    "</s:Envelope>";
