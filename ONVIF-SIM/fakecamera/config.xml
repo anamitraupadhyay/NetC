@@ -4,7 +4,7 @@
     <!-- <server_ip>172.16.4.9</server_ip> -->
     <server_port>7000</server_port>
     <fromdhcp>true</fromdhcp>
-    <searchdomain>videonetics</searchdomain>
+    <searchdomain>HOSTNAME</searchdomain>
     <!-- <ipv4></ipv4>
     <ipv6></ipv6> -->
     <type>ipv4</type>
