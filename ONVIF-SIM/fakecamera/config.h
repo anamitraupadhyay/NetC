@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <ifaddrs.h>
 
 #define DISCOVERY_PORT      3702
 #define MULTICAST_ADDR      "239.255.255.250"
@@ -40,6 +41,53 @@ struct datafromxml{
 so instead declared beside struct*/
 
 typedef struct datafromxml config;
+
+
+typedef struct{
+    char name[32];//eth0, eth1 ...
+    char ip[64];//192.168.1.5, ...
+    char mac[64];// "AA BB CC"
+    int mtu;//1500
+    int prefix_len;//24
+    int i_up;// 1 or 0
+}Interfacedata;
+
+
+const char *NET_IF_HEADER = 
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+    "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+    "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
+    "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+    "<s:Body>"
+        "<tds:GetNetworkInterfacesResponse>";
+
+// This template is reused for EVERY interface found
+const char *NET_IF_ITEM = 
+        "<tds:NetworkInterfaces token=\"%s\">"
+            "<tds:Enabled>true</tds:Enabled>"
+            "<tds:Info>"
+                "<tt:Name>%s</tt:Name>"
+                "<tt:HwAddress>%s</tt:HwAddress>"
+                "<tt:MTU>%d</tt:MTU>"
+            "</tds:Info>"
+            "<tds:IPv4>"
+                "<tt:Enabled>true</tt:Enabled>"
+                "<tt:Config>"
+                    "<tt:Manual>"
+                        "<tt:Address>%s</tt:Address>"
+                        "<tt:PrefixLength>%d</tt:PrefixLength>"
+                    "</tt:Manual>"
+                    "<tt:DHCP>true</tt:DHCP>"
+                "</tt:Config>"
+            "</tds:IPv4>"
+        "</tds:NetworkInterfaces>";
+
+const char *NET_IF_FOOTER = 
+        "</tds:GetNetworkInterfacesResponse>"
+    "</s:Body>"
+    "</s:Envelope>";
+
+
 
 // copied probe match template
 const char *PROBE_MATCH_TEMPLATE =

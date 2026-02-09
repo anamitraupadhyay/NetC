@@ -636,42 +636,39 @@ void *tcpserver(void *arg) {
         // CASE: GetNetworkInterfaces
         else if(strstr(buf, "GetNetworkInterfaces")){
             printf("[TCP] Req: GetNetworkInterfaces\n");
-            config cfg_iface = {0};
-            if(!load_config("config.xml", &cfg_iface)){
-                // Fallback defaults
-                strncpy(cfg_iface.interface_token, "eth0", sizeof(cfg_iface.interface_token)-1);
-                strncpy(cfg_iface.hwaddress, "02:00:00:00:00:01", sizeof(cfg_iface.hwaddress)-1);
-                cfg_iface.mtu = 1500;
-                strncpy(cfg_iface.ip_addr, "192.168.1.100", sizeof(cfg_iface.ip_addr)-1);
-                cfg_iface.prefix_length = 24;
-                strncpy(cfg_iface.fromdhcp, "false", sizeof(cfg_iface.fromdhcp)-1);
+            //config cfg_iface = {0};
+            
+            Interfacedata ifaces[3];
+            int count = scan_interfaces(ifaces, 3);
+            char *xml_buf = (char *)malloc(8192);//unprecedented maybe
+            strcpy(xml_buf, NET_IF_HEADER);//starting done
+        
+            char soap_response[16384];
+            char eachtime[2048];
+            for (int i = 0; i < count; i++) {//middle parts
+                snprintf(eachtime, sizeof(eachtime), NET_IF_ITEM,
+                    ifaces[i].name,      // token
+                    ifaces[i].name,     // Info Name
+                    ifaces[i].mac,     // Info Mac
+                    ifaces[i].mtu,    // Info MTU
+                    ifaces[i].ip,    // IPv4 Address
+                    ifaces[i].prefix_len // IPv4 Prefix
+                );
+                strcat(xml_buf, eachtime);
             }
+            //strcat(xml_buf, eachtime);
+            strcat(xml_buf, NET_IF_FOOTER);
         
-            // Ensure we have reasonable defaults if XML was partial
-            if(cfg_iface.mtu == 0) cfg_iface.mtu = 1500;
-            if(cfg_iface.prefix_length == 0) cfg_iface.prefix_length = 24;
-            if(cfg_iface.interface_token[0] == '\0') strcpy(cfg_iface.interface_token, "eth0");
-        
-            char soap_response[4096];
+            //char response[8192];
             snprintf(soap_response, sizeof(soap_response),
-                     GET_NET_INTERFACES_TEMPLATE,
-                     cfg_iface.interface_token,  // Token
-                     cfg_iface.interface_token,  // Name (using token as name)
-                     cfg_iface.hwaddress,
-                     cfg_iface.mtu,
-                     cfg_iface.ip_addr,
-                     cfg_iface.prefix_length,
-                     cfg_iface.fromdhcp); // Assuming fromdhcp is "true" or "false" string
-        
-            char response[8192];
-            snprintf(response, sizeof(response),
                      "HTTP/1.1 200 OK\r\n"
                      "Content-Type: application/soap+xml; charset=utf-8\r\n"
                      "Content-Length: %zu\r\n"
                      "Connection: close\r\n\r\n%s",
-                     strlen(soap_response), soap_response);
+                     strlen(xml_buf), xml_buf);
         
-            send(cs, response, strlen(response), 0);
+            send(cs, soap_response, strlen(soap_response), 0);
+            free(xml_buf);
         }
         else if(strstr(buf, "SetNetworkInterfaces")){}
 
