@@ -439,14 +439,14 @@ void applydnstoservice(){
                                                 // in short the value
                 searchdomain[len] = '\0';
             }
-            else if((s = strstr(line, "<addr>")) && (e = strstr(line, "</addr>"))){
-                  int len = e - (s + 6);
-                  if(len > 0 && len < (int)sizeof(addr) - 1){
-                    memcpy(addr, s + 6, len);
-                    addr[len] = '\0';
-                  }
-                }
+        }
+        if((s = strstr(line, "<addr>")) && (e = strstr(line, "</addr>"))){
+              int len = e - (s + 6);
+              if(len > 0 && len < (int)sizeof(addr) - 1){
+                memcpy(addr, s + 6, len);
+                addr[len] = '\0';
               }
+            }
             
               if(!addr[0]){ 
                   printf("no dns address found in config.xml\n");
