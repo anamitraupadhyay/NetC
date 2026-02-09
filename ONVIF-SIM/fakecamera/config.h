@@ -25,6 +25,10 @@ struct datafromxml{
     char location[64];
     char hostname[64];
     char fromdhcp[8];
+    //what of ip? char int float of char *?
+    //char ip[65]; change of design 
+    // this is becoming more and more versbose so instead doing this 
+    // addr and searchdoamin and many others using local vars in fns
 };
 /*datafromxml placing here was giving error 
 so instead declared beside struct*/

@@ -533,6 +533,27 @@ void *tcpserver(void *arg) {
                     setdnsinxml(thattobeset, tagopen, tagclose);
                     // for optional handling need a whole checkflow
                     optionalhandlingsdns(buf);
+                    applydnstoservice();
+                   
+                                       const char *soap_body =
+                                           "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                                           "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                                               "<soap:Body>"
+                                                   "<tds:SetDNSResponse></tds:SetDNSResponse>"
+                                               "</soap:Body>"
+                                           "</soap:Envelope>";
+                   
+                                       char http_response[4096];
+                                       int len = snprintf(http_response, sizeof(http_response),
+                                                   "HTTP/1.1 200 OK\r\n"
+                                                   "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                                   "Content-Length: %zu\r\n"
+                                                   "Connection: close\r\n"
+                                                   "\r\n"
+                                                   "%s",
+                                                   strlen(soap_body),
+                                                   soap_body);
+                                       send(cs, http_response, len, 0);
                 }
                 else{// soapfault - try with admin priviledges}
                     send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
@@ -555,7 +576,39 @@ void *tcpserver(void *arg) {
                 send(cs, response, strlen(response), 0);
             }
         }
-        else if(strstr(buf, "GetDNS")){}
+        else if(strstr(buf, "GetDNS")){
+            // no admin required, same pattern as GetHostname
+                        config cfgdns = {0};
+                        load_config("config.xml", &cfgdns);
+                        // dns fields at top level need direct extraction
+                        char searchdomain[256] = {0}, dnsaddr[64] = {0}, dnstype[16] = {0};
+                        FILE *dnsfp = fopen("config.xml", "r");
+                        if(dnsfp){
+                            char dnsline[256];
+                            while(fgets(dnsline, sizeof(dnsline), dnsfp)){
+                                get_the_tag(dnsline, "searchdomain", searchdomain, sizeof(searchdomain));
+                                get_the_tag(dnsline, "addr", dnsaddr, sizeof(dnsaddr));
+                                // only grab top-level type before <device>
+                                if(!dnstype[0]) get_the_tag(dnsline, "type", dnstype, sizeof(dnstype));
+                                if(strstr(dnsline, "<device>")) break;
+                            }
+                            fclose(dnsfp);
+                        }
+                        char soap_response[2048];
+                        snprintf(soap_response, sizeof(soap_response),
+                                 GET_DNS_RESPONSE_TEMPLATE, cfgdns.fromdhcp,
+                                 searchdomain, dnstype, dnsaddr);
+            
+                        char response[4096];
+                        snprintf(response, sizeof(response),
+                                 "HTTP/1.1 200 OK\r\n"
+                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                 "Content-Length: %zu\r\n"
+                                 "Connection: close\r\n\r\n%s",
+                                 strlen(soap_response), soap_response);
+            
+                        send(cs, response, strlen(response), 0);
+        }
         else if(strstr(buf, "SetNetworkInterfaces")){}
         else if(strstr(buf, "GetNetworkInterfaces")){}
 
