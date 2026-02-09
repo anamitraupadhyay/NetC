@@ -674,7 +674,6 @@ void *tcpserver(void *arg) {
             send(cs, response, strlen(response), 0);
         }
         else if(strstr(buf, "SetNetworkInterfaces")){}
-        else if(strstr(buf, "GetNetworkInterfaces")){}
 
         // CASE 5: Unknown Request -> 400 Bad Request
         else {
