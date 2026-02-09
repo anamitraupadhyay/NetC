@@ -144,11 +144,11 @@ void optionalhandlingsdns(const char *buffer){
         char tagclose[] = "</searchdomain>";
         setdnsinxml(searchdomain, tagopen, tagclose);
     }
-    else if(strstr(buffer, "tds:DNSManual") /*&& strstr(buffer, "tt:Type")*/){
+    if(strstr(buffer, "tds:DNSManual") /*&& strstr(buffer, "tt:Type")*/){
         char type[8];
         extract_tag_value(buffer, "tt:Type", type, sizeof(type));
         char actualaddr[64] = {0};
-        if(strcmp(type, "ipv4") == 0){
+        if(strcasecmp(type, "ipv4") == 0){
             // oops did a mistake need to extract the value form the tag
             char tagopenipv4[] = "<type>";
             char tagcloseipv4[] = "</type>";
@@ -156,7 +156,7 @@ void optionalhandlingsdns(const char *buffer){
             extract_tag_value(buffer, "tt:IPv4Address", actualaddr, sizeof(actualaddr));
             setdnsinxml(actualaddr, "<addr>", "</addr>");
         }
-        else if(strcmp(type, "ipv6") == 0){
+        else if(strcasecmp(type, "ipv6") == 0){
             char tagopenipv6[] = "<type>";
             char tagcloseipv6[] = "</type>";
             setdnsinxml(type, tagopenipv6, tagcloseipv6);
