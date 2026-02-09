@@ -88,6 +88,21 @@ static inline int load_config(const char *filename, config *cfg)
         else if(get_the_tag(line, "hostname", cfg->hostname, sizeof(cfg->hostname)));
             
         else if(get_the_tag(line, "FromDHCP", cfg->fromdhcp, sizeof(cfg->fromdhcp))){}
+        
+            
+        else if(get_the_tag(line, "addr", cfg->ip_addr, sizeof(cfg->ip_addr))); 
+            
+        else if(get_the_tag(line, "gateway", cfg->gateway, sizeof(cfg->gateway)));
+            
+        else if(get_the_tag(line, "hwaddress", cfg->hwaddress, sizeof(cfg->hwaddress)));
+            
+        else if(get_the_tag(line, "interface_token", cfg->interface_token, sizeof(cfg->interface_token)));
+            
+        else if (get_the_tag(line, "mtu", buf, sizeof(buf)))
+                cfg->mtu = atoi(buf);
+            
+        else if (get_the_tag(line, "subnet", buf, sizeof(buf)))
+                cfg->prefix_length = atoi(buf);
     }
 
     fclose(fp);

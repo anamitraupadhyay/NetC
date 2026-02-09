@@ -609,6 +609,70 @@ void *tcpserver(void *arg) {
             
                         send(cs, response, strlen(response), 0);
         }
+        // CASE: GetNetworkDefaultGateway
+        else if(strstr(buf, "GetNetworkDefaultGateway")){
+            printf("[TCP] Req: GetNetworkDefaultGateway\n");
+            config cfg_net = {0};
+            if(!load_config("config.xml", &cfg_net)){
+                // Fallback defaults if config fails
+                strncpy(cfg_net.gateway, "192.168.1.1", sizeof(cfg_net.gateway)-1);
+            }
+        
+            char soap_response[2048];
+            snprintf(soap_response, sizeof(soap_response),
+                     GET_NET_GATEWAY_TEMPLATE, cfg_net.gateway);
+        
+            char response[4096];
+            snprintf(response, sizeof(response),
+                     "HTTP/1.1 200 OK\r\n"
+                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                     "Content-Length: %zu\r\n"
+                     "Connection: close\r\n\r\n%s",
+                     strlen(soap_response), soap_response);
+        
+            send(cs, response, strlen(response), 0);
+        }
+        
+        // CASE: GetNetworkInterfaces
+        else if(strstr(buf, "GetNetworkInterfaces")){
+            printf("[TCP] Req: GetNetworkInterfaces\n");
+            config cfg_iface = {0};
+            if(!load_config("config.xml", &cfg_iface)){
+                // Fallback defaults
+                strncpy(cfg_iface.interface_token, "eth0", sizeof(cfg_iface.interface_token)-1);
+                strncpy(cfg_iface.hwaddress, "02:00:00:00:00:01", sizeof(cfg_iface.hwaddress)-1);
+                cfg_iface.mtu = 1500;
+                strncpy(cfg_iface.ip_addr, "192.168.1.100", sizeof(cfg_iface.ip_addr)-1);
+                cfg_iface.prefix_length = 24;
+                strncpy(cfg_iface.fromdhcp, "false", sizeof(cfg_iface.fromdhcp)-1);
+            }
+        
+            // Ensure we have reasonable defaults if XML was partial
+            if(cfg_iface.mtu == 0) cfg_iface.mtu = 1500;
+            if(cfg_iface.prefix_length == 0) cfg_iface.prefix_length = 24;
+            if(cfg_iface.interface_token[0] == '\0') strcpy(cfg_iface.interface_token, "eth0");
+        
+            char soap_response[4096];
+            snprintf(soap_response, sizeof(soap_response),
+                     GET_NET_INTERFACES_TEMPLATE,
+                     cfg_iface.interface_token,  // Token
+                     cfg_iface.interface_token,  // Name (using token as name)
+                     cfg_iface.hwaddress,
+                     cfg_iface.mtu,
+                     cfg_iface.ip_addr,
+                     cfg_iface.prefix_length,
+                     cfg_iface.fromdhcp); // Assuming fromdhcp is "true" or "false" string
+        
+            char response[8192];
+            snprintf(response, sizeof(response),
+                     "HTTP/1.1 200 OK\r\n"
+                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                     "Content-Length: %zu\r\n"
+                     "Connection: close\r\n\r\n%s",
+                     strlen(soap_response), soap_response);
+        
+            send(cs, response, strlen(response), 0);
+        }
         else if(strstr(buf, "SetNetworkInterfaces")){}
         else if(strstr(buf, "GetNetworkInterfaces")){}
 
