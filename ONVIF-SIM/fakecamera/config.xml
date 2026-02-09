@@ -12,6 +12,11 @@
 
     <!-- Device Information -->
     <device>
+        <gateway>192.168.1.1</gateway>
+        <hwaddress>00:11:22:33:44:55</hwaddress>
+        <mtu>1500</mtu>
+        <subnet>24</subnet>
+        <interface_token>eth0</interface_token>
         <manufacturer>Videonetics</manufacturer>
         <model>Videonetics_Camera_Emulator</model>
         <firmware_version>10.0</firmware_version>
