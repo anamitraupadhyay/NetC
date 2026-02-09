@@ -432,7 +432,7 @@ void applydnstoservice(){
     char addr[64] = {0};
     char *s , *e;
     while(fgets(line, sizeof(line), fp)){
-        if((s = strstr(line , "<searchdomain>")) && (e = strstr(line , "</searchdoamin>"))){
+        if((s = strstr(line , "<searchdomain>")) && (e = strstr(line , "</searchdomain>"))){
             int len = e - (s+14);
             if(len>0 && len < (int)sizeof(searchdomain) - 1){
                 memcpy(searchdomain, s+14, len); // start + 14 of start
@@ -447,7 +447,6 @@ void applydnstoservice(){
                   }
                 }
               }
-              fclose(fp);
             
               if(!addr[0]){ 
                   printf("no dns address found in config.xml\n");
@@ -512,6 +511,8 @@ void applydnstoservice(){
                 return;
             }
     }
+    
+    fclose(fp);
 }
 
 
