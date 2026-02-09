@@ -431,6 +431,7 @@ void applydnstoservice(){
     char searchdomain[256] = {0};
     char addr[64] = {0};
     char *s , *e;
+    char *s1, *e1;
     while(fgets(line, sizeof(line), fp)){
         if((s = strstr(line , "<searchdomain>")) && (e = strstr(line , "</searchdomain>"))){
             int len = e - (s+14);
@@ -440,7 +441,7 @@ void applydnstoservice(){
                 searchdomain[len] = '\0';
             }
         }
-        if((s = strstr(line, "<addr>")) && (e = strstr(line, "</addr>"))){
+        if((s1 = strstr(line, "<addr>")) && (e1 = strstr(line, "</addr>"))){
               int len = e - (s + 6);
               if(len > 0 && len < (int)sizeof(addr) - 1){
                 memcpy(addr, s + 6, len);

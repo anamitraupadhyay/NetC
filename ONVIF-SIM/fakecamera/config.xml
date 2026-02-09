@@ -7,8 +7,8 @@
     <searchdomain>HOSTNAME</searchdomain>
     <!-- <ipv4></ipv4>
     <ipv6></ipv6> -->
-    <type>ipv4</type>
-    <addr>172.21.64.1</addr> <!-- wsl-172.21.64.1, videonetics-172.16.5.21 -->
+    <type>IPv4</type>
+    <addr>172.16.5.21</addr>
 
     <!-- Device Information -->
     <device>
@@ -17,7 +17,7 @@
         <firmware_version>10.0</firmware_version>
         <serial_number>VN001</serial_number>
         <hardware_id>1.0</hardware_id>
-        <type>video_encoder</type>
+        <type>IPv4</type>
         <profile>streaming</profile>
         <hardware>VMS</hardware>
         <location>India</location>
