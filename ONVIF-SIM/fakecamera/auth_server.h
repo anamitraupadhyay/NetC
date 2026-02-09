@@ -176,15 +176,24 @@ void *tcpserver(void *arg) {
         }
         else if(strstr(buf, "GetHostname")){
             // no admin required
+            // ok return devices hostname actual also later setting it actually
+            // for now shifiting towards actual devicename or changing it really
+            /*
             config cfggethost = {0};
             if(!load_config("config.xml", &cfggethost)){
                 // fallback default
                 strncpy(cfggethost.hostname, "defhostname", sizeof(cfggethost.hostname)-1);
                 strncpy(cfggethost.fromdhcp, "false", sizeof(cfggethost.fromdhcp)-1);
+            }*/
+            char hostname[256] = {0};
+            config cfggethost = {0};
+            if(gethostname(hostname, 256) != 0){
+                strncpy(cfggethost.hostname, "defhostname", sizeof(cfggethost.hostname)-1);
+                strncpy(cfggethost.fromdhcp, "false", sizeof(cfggethost.fromdhcp)-1);
             }
             char soap_response[2048];
             snprintf(soap_response, sizeof(soap_response),
-                     GET_HOSTNAME_RESPONSE_TEMPLATE, request_message_id, cfggethost.fromdhcp,cfggethost.hostname);
+                     GET_HOSTNAME_RESPONSE_TEMPLATE, request_message_id, /*cfggethost.fromdhcp,cfggethost.hostname*/ cfggethost.fromdhcp, hostname);
 
             char response[4096];
             snprintf(response, sizeof(response),
