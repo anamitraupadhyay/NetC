@@ -85,9 +85,9 @@ static inline int load_config(const char *filename, config *cfg)
         else if (get_the_tag(line, "hardware_id", buf,sizeof(buf)))
             cfg->hardware_id = (float)atoi(buf);
             
-        else if(get_the_tag(line, "hostname", cfg->hostname, sizeof(buf)));
+        else if(get_the_tag(line, "hostname", cfg->hostname, sizeof(cfg->hostname)));
             
-        else if(get_the_tag(line, "FromDHCP", cfg->fromdhcp, sizeof(buf))){}
+        else if(get_the_tag(line, "FromDHCP", cfg->fromdhcp, sizeof(cfg->fromdhcp))){}
     }
 
     fclose(fp);
