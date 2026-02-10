@@ -122,7 +122,6 @@ void setuserscsv(){
         return;
     }
 
-    // 1. Open Temp File DIRECTLY (Skip memstream complexity)
     FILE *fptmp = fopen("CredsWithLevel.tmp", "w");
     if (!fptmp) {
         perror("CredsWithLevel.tmp");
@@ -133,9 +132,7 @@ void setuserscsv(){
     char line[5120];
     int is_header = 1;
 
-    // 2. Read existing CSV line by line
     while (fgets(line, sizeof(line), fp)) {
-        // Always write header first
         if (is_header) {
             fprintf(fptmp, "%s", line);
             is_header = 0;
@@ -145,7 +142,7 @@ void setuserscsv(){
         char file_user[256];
         int match_index = -1;
 
-        // 3. Parse username (handle potential whitespace/formatting)
+        // Parse username (handle potential whitespace/formatting)
         if (sscanf(line, "%255[^,]", file_user) == 1) {
             // Check against ALL users pending update
             for (int i = 0; i < numofuserssentupdate; i++) {
@@ -156,7 +153,6 @@ void setuserscsv(){
             }
         }
 
-        // 4. Update Logic
         if (match_index != -1) {
             // MATCH FOUND: Write the NEW data from usersadd
             fprintf(fptmp, "%s,%s,%s\n", 
@@ -180,7 +176,7 @@ void setuserscsv(){
     fclose(fptmp);
     fclose(fp);
 
-    // 5. Atomic Swap
+    // Atomic Swap as in atomicity 'a' in acid
     if (rename("CredsWithLevel.tmp", "CredsWithLevel.csv") != 0) {
         perror("Failed to rename temp file");
         unlink("CredsWithLevel.tmp");
