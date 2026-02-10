@@ -133,17 +133,43 @@ void setuserscsv(){
     }
 
     // Read and process CSV line by line
-    char line[5120];
+    char line[5120];// below jumps the header
     while (fgets(line, sizeof(line), fp)) {
         fprintf(memstream, "%s", line);
     }
-    // forgot this step critical
-    for (int i = 0; i < numofuserssentupdate; i++) {
-        fprintf(memstream, "%s,%s,%s\n", 
-            usersadd[i].username, 
-            usersadd[i].password, 
-            usersadd[i].userLevel);
-    }
+   // main loop as the check is not here so it passed well
+   // maybe later the check and other checks will be implemented here
+   // so that time complexity will be less
+   while(fgets(line, sizeof(line), fp)){
+       char file_user[256];
+       // Parse up to the first comma to get the username
+       // Note: We use a temp buffer to avoid modifying 'line' in case we need to write it back
+       if (sscanf(line, "%255[^,]", file_user) == 1) {
+           
+           // Check if this file_user is one of the users we need to update
+           int match_index = -1;
+           for (int i = 0; i < numofuserssentupdate; i++) {
+               if (strcmp(file_user, usersadd[i].username) == 0) {
+                   match_index = i;
+                   break;
+               }
+           }
+
+           if (match_index != -1) {
+               // FOUND MATCH: Write the NEW data instead of the old line
+               fprintf(memstream, "%s,%s,%s\n", 
+                   usersadd[match_index].username, 
+                   usersadd[match_index].password, 
+                   usersadd[match_index].userLevel);
+               
+               // just continue as yk
+               continue; 
+           }
+       }
+       
+       // NO MATCH: Write the original line exactly as is
+       fprintf(memstream, "%s", line);
+   }
 
     // Reset the counter
     numofuserssentupdate = 0;

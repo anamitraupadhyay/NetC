@@ -168,12 +168,12 @@ void setusers(const char *request,int accept) {
     printf("before loop validity check");
     for(int i = 0; i< numofuserssentupdate; i++){
         printf("loop ran of validity check");
-        if (!validate_cred_edgecases_forsetuser(users[i].username, users[i].password, fail_reason)){
+        if (!validate_cred_edgecases_forsetuser(usersadd[i].username, usersadd[i].password, fail_reason)){
             validationpass = 0; break;
             printf("validpass is now 0-bounds failed");
         }
         // ok after the bound has passed now check in db presence
-        if(!user_exists_in_db(users[i].username)){
+        if(!user_exists_in_db(usersadd[i].username)){
             // no need to set the validation pass for this case
             // i think doing the abrupt case check like validate fn 
             // as its standalone and snprintf-ing it 
