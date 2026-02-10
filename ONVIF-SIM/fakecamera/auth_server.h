@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <time.h>
+#include <limits.h> // For HOST_NAME_MAX
+
 
 //#include "authhandler/digest_auth.h"
 #include "authhandler/auth_utils.h"
@@ -185,15 +187,11 @@ void *tcpserver(void *arg) {
                 strncpy(cfggethost.hostname, "defhostname", sizeof(cfggethost.hostname)-1);
                 strncpy(cfggethost.fromdhcp, "false", sizeof(cfggethost.fromdhcp)-1);
             }*/
-            char hostname[256] = {0};
-            config cfggethost = {0};
-            if(gethostname(hostname, 256) != 0){
-                strncpy(cfggethost.hostname, "defhostname", sizeof(cfggethost.hostname)-1);
-                strncpy(cfggethost.fromdhcp, "false", sizeof(cfggethost.fromdhcp)-1);
-            }
+            char hostname[HOST_NAME_MAX];
+            gethostname(hostname, sizeof(hostname));
             char soap_response[2048];
             snprintf(soap_response, sizeof(soap_response),
-                     GET_HOSTNAME_RESPONSE_TEMPLATE, request_message_id, /*cfggethost.fromdhcp,cfggethost.hostname*/ cfggethost.fromdhcp, hostname);
+                     GET_HOSTNAME_RESPONSE_TEMPLATE, request_message_id, /*cfggethost.fromdhcp,cfggethost.hostname*/ cfg1.fromdhcp, hostname);
 
             char response[4096];
             snprintf(response, sizeof(response),
