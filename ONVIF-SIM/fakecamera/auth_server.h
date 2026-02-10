@@ -276,6 +276,7 @@ void *tcpserver(void *arg) {
             // if(is_admin(buf)){ ok just chnage the has any auth and later do enum
                 // --- SUB-CASE 3C: HAS AUTH + IS ADMIN -> PASS ---
                 printf("[TCP] Req: GetUsers (Auth Present + Admin) -> ALLOWED\n");
+                loadUsers();
                 char soap_response[8192];  // Large buffer for multiple users
                 GenerateGetUsersResponse1(soap_response, sizeof(soap_response));
 
@@ -342,32 +343,10 @@ void *tcpserver(void *arg) {
   
                 printf("[DEBUG] Extracted User: '%s'\n", user); // Debug print
                 if(user[0] != '\0' && is_admin(buf, user)){
-                    parseSetUsers(buf); setuserscsv();
-                  
-  
-                // taken template
-                       // ONVIF Spec: CreateUsersResponse is empty on success
-                       const char *soap_body =
-                           "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                           "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
-                               "<soap:Body>"
-                                   "<tds:SetUsersResponse></tds:SetUsersResponse>"
-                               "</soap:Body>"
-                           "</soap:Envelope>";
-  
-                       char http_response[4096]; // Buffer size should be sufficient for this
-                       int len = snprintf(http_response, sizeof(http_response),
-                                   "HTTP/1.1 200 OK\r\n"
-                                   "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                                   "Content-Length: %zu\r\n"
-                                   "Connection: close\r\n"
-                                   "\r\n"
-                                   "%s",
-                                   strlen(soap_body),
-                                   soap_body);
-  
-                       // 4. Send the response
-                       send(cs, http_response, len, 0);
+                    setusers(buf, cs);// handles the 
+                    // parsesetusers also the edgecases too
+                    // now addition of that case that if any user 
+                    // doesnt exist in csv the whole process will fail
             }
             
                 else{
@@ -418,10 +397,8 @@ void *tcpserver(void *arg) {
                         }
         
                         if (user[0] != '\0' && is_admin(buf, user)) {
-                            // 1. Parse the XML to find which users to delete
                             parse_delete_users_xml(buf);
         
-                            // 2. Iterate through the extracted usernames and delete them from the CSV
                             for (int i = 0; i < numofuserssentdelete; i++) {
                                 deluserscsv(usersdelarray[i].username);
                             }
@@ -641,41 +618,63 @@ void *tcpserver(void *arg) {
         }
         
         // CASE: GetNetworkInterfaces
-        else if(strstr(buf, "GetNetworkInterfaces")){
-            printf("[TCP] Req: GetNetworkInterfaces\n");
-            //config cfg_iface = {0};
-            
-            Interfacedata ifaces[3];
-            int count = scan_interfaces(ifaces, 3);
-            char *xml_buf = (char *)malloc(8192);//unprecedented maybe
-            strcpy(xml_buf, NET_IF_HEADER);//starting done
-        
-            char soap_response[16384];
-            char eachtime[2048];
-            for (int i = 0; i < count; i++) {//middle parts
-                snprintf(eachtime, sizeof(eachtime), NET_IF_ITEM,
-                    ifaces[i].name,      // token
-                    ifaces[i].name,     // Info Name
-                    ifaces[i].mac,     // Info Mac
-                    ifaces[i].mtu,    // Info MTU
-                    ifaces[i].ip,    // IPv4 Address
-                    ifaces[i].prefix_len // IPv4 Prefix
-                );
-                strcat(xml_buf, eachtime);
+        else if (strstr(buf, "GetNetworkInterfaces")) {
+            if (has_any_authentication(buf)) {
+                char user[256] = {0};
+                extract_header_val(buf, "username", user, sizeof(user));
+
+                // Check for Admin privileges
+                if (is_admin(buf, user)) {
+                    printf("[TCP] Req: GetNetworkInterfaces (Auth+Admin) -> ALLOWED\n");
+                    
+                    Interfacedata ifaces[3];
+                    int count = scan_interfaces(ifaces, 3);
+                    char *xml_buf = (char *)malloc(8192);
+                    strcpy(xml_buf, NET_IF_HEADER);
+
+                    char soap_response[16384];
+                    char eachtime[2048];
+                    for (int i = 0; i < count; i++) {
+                        snprintf(eachtime, sizeof(eachtime), NET_IF_ITEM,
+                                 ifaces[i].name,      // token
+                                 ifaces[i].name,      // Info Name
+                                 ifaces[i].mac,       // Info Mac
+                                 ifaces[i].mtu,       // Info MTU
+                                 ifaces[i].ip,        // IPv4 Address
+                                 ifaces[i].prefix_len // IPv4 Prefix
+                        );
+                        strcat(xml_buf, eachtime);
+                    }
+                    strcat(xml_buf, NET_IF_FOOTER);
+
+                    snprintf(soap_response, sizeof(soap_response),
+                             "HTTP/1.1 200 OK\r\n"
+                             "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                             "Content-Length: %zu\r\n"
+                             "Connection: close\r\n\r\n%s",
+                             strlen(xml_buf), xml_buf);
+
+                    send(cs, soap_response, strlen(soap_response), 0);
+                    free(xml_buf);
+                } else {
+                    // Authenticated but NOT Admin
+                    printf("[TCP] Req: GetNetworkInterfaces (Not Admin) -> FORBIDDEN\n");
+                    send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
+                }
+            } else {
+                // No Authentication -> Challenge
+                printf("[TCP] Req: GetNetworkInterfaces (No Auth) -> CHALLENGE\n");
+                char nonce[33];
+                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", rand(), rand(), rand(), rand());
+                char response[1024];
+                snprintf(response, sizeof(response),
+                         "HTTP/1.1 401 Unauthorized\r\n"
+                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
+                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                         "Content-Length: 0\r\n"
+                         "Connection: close\r\n\r\n", nonce);
+                send(cs, response, strlen(response), 0);
             }
-            //strcat(xml_buf, eachtime);
-            strcat(xml_buf, NET_IF_FOOTER);
-        
-            //char response[8192];
-            snprintf(soap_response, sizeof(soap_response),
-                     "HTTP/1.1 200 OK\r\n"
-                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                     "Content-Length: %zu\r\n"
-                     "Connection: close\r\n\r\n%s",
-                     strlen(xml_buf), xml_buf);
-        
-            send(cs, soap_response, strlen(soap_response), 0);
-            free(xml_buf);
         }
         else if(strstr(buf, "SetNetworkInterfaces")){}
 
