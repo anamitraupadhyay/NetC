@@ -47,8 +47,8 @@ static int numofuserssentupdate = 0;
 static int numofuserssentdelete = 0;
 // need to find better logic later for num of users sent
 // the design needs to be clever as to parse efficiently
-static UserCredsupdate usersadd[] = {0};
-static usersdelarr usersdelarray[] = {0};
+static UserCredsupdate usersadd[MAXUSERSADD] = {0};
+static usersdelarr usersdelarray[MAXUSERSADD] = {0};
 
 void parseSetUsers(const char *request){
     //const char *start = strstr(request,"<tds:CreateUsers>");
@@ -122,91 +122,71 @@ void setuserscsv(){
         return;
     }
 
-    // Create memory stream for new content
-    char *buffer = NULL;
-    size_t size = 0;
-    FILE *memstream = open_memstream(&buffer, &size);
-    if (!memstream) {
-        perror("open_memstream");
+    // 1. Open Temp File DIRECTLY (Skip memstream complexity)
+    FILE *fptmp = fopen("CredsWithLevel.tmp", "w");
+    if (!fptmp) {
+        perror("CredsWithLevel.tmp");
         fclose(fp);
         return;
     }
 
-    // Read and process CSV line by line
-    char line[5120];// below jumps the header
+    char line[5120];
+    int is_header = 1;
+
+    // 2. Read existing CSV line by line
     while (fgets(line, sizeof(line), fp)) {
-        fprintf(memstream, "%s", line);
+        // Always write header first
+        if (is_header) {
+            fprintf(fptmp, "%s", line);
+            is_header = 0;
+            continue;
+        }
+
+        char file_user[256];
+        int match_index = -1;
+
+        // 3. Parse username (handle potential whitespace/formatting)
+        if (sscanf(line, "%255[^,]", file_user) == 1) {
+            // Check against ALL users pending update
+            for (int i = 0; i < numofuserssentupdate; i++) {
+                if (strcmp(file_user, usersadd[i].username) == 0) {
+                    match_index = i;
+                    break;
+                }
+            }
+        }
+
+        // 4. Update Logic
+        if (match_index != -1) {
+            // MATCH FOUND: Write the NEW data from usersadd
+            fprintf(fptmp, "%s,%s,%s\n", 
+                usersadd[match_index].username, 
+                usersadd[match_index].password, 
+                usersadd[match_index].userLevel);
+            printf("[DEBUG] Updated user: %s\n", usersadd[match_index].username);
+        } else {
+            // NO MATCH: Keep the OLD line
+            fprintf(fptmp, "%s", line);
+        }
     }
-   // main loop as the check is not here so it passed well
-   // maybe later the check and other checks will be implemented here
-   // so that time complexity will be less
-   while(fgets(line, sizeof(line), fp)){
-       char file_user[256];
-       // Parse up to the first comma to get the username
-       // Note: We use a temp buffer to avoid modifying 'line' in case we need to write it back
-       if (sscanf(line, "%255[^,]", file_user) == 1) {
-           
-           // Check if this file_user is one of the users we need to update
-           int match_index = -1;
-           for (int i = 0; i < numofuserssentupdate; i++) {
-               if (strcmp(file_user, usersadd[i].username) == 0) {
-                   match_index = i;
-                   break;
-               }
-           }
 
-           if (match_index != -1) {
-               // FOUND MATCH: Write the NEW data instead of the old line
-               fprintf(memstream, "%s,%s,%s\n", 
-                   usersadd[match_index].username, 
-                   usersadd[match_index].password, 
-                   usersadd[match_index].userLevel);
-               
-               // just continue as yk
-               continue; 
-           }
-       }
-       
-       // NO MATCH: Write the original line exactly as is
-       fprintf(memstream, "%s", line);
-   }
-
-    // Reset the counter
+    // Reset counter
     numofuserssentupdate = 0;
 
-    fclose(fp);
-    fclose(memstream);
-
-    // Write to temp file
-    FILE *fptmp = fopen("CredsWithLevel.tmp", "w");
-    if (!fptmp) {
-        perror("CredsWithLevel.tmp");
-        free(buffer);
-        return;
-    }
-
-    if (fprintf(fptmp, "%s", buffer) < 0) {
-        perror("Failed to write to temp file");
-        fclose(fptmp);
-        unlink("CredsWithLevel.tmp");
-        free(buffer);
-        return;
-    }
-
+    // Flush and Close
     fflush(fptmp);
     int fd = fileno(fptmp);
-    fsync(fd);
+    fsync(fd); // Ensure write to disk
     fclose(fptmp);
+    fclose(fp);
 
-    // Atomic rename, from 'acid' 'a' i guess
+    // 5. Atomic Swap
     if (rename("CredsWithLevel.tmp", "CredsWithLevel.csv") != 0) {
         perror("Failed to rename temp file");
         unlink("CredsWithLevel.tmp");
-        free(buffer);
-        return;
+    } else {
+        printf("CSV update complete.\n");
     }
-
-    free(buffer);
 }
 
 // need to modify the whole impl logic to accomodate series of del users
