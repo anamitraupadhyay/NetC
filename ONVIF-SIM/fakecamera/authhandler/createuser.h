@@ -155,7 +155,7 @@ void appendusers(const char *request,int accept) {
 void setusers(const char *request,int accept) {
     // 1. Reset count necessary its a global var
     // and the improved design hasnt been applied yet
-    numofuserssent = 0;
+    numofuserssentupdate = 0;//its the necesssity as its used in parsesetusers
 
     // 2. Parse the XML
     parseSetUsers(request);
@@ -163,12 +163,25 @@ void setusers(const char *request,int accept) {
     char fail_reason[256];
     int validationpass = 1;
 
+    // so the flow is 1st check the bounds
+    // then if passed then only the check if this present or not in csv
     printf("before loop validity check");
-    for(int i = 0; i< numofuserssent; i++){
+    for(int i = 0; i< numofuserssentupdate; i++){
         printf("loop ran of validity check");
-        if (!validate_cred_edgecases(users[i].username, users[i].password, fail_reason)){
+        if (!validate_cred_edgecases_forsetuser(users[i].username, users[i].password, fail_reason)){
             validationpass = 0; break;
-            printf("validpass is now 0");
+            printf("validpass is now 0-bounds failed");
+        }
+        // ok after the bound has passed now check in db presence
+        if(!user_exists_in_db(users[i].username)){
+            // no need to set the validation pass for this case
+            // i think doing the abrupt case check like validate fn 
+            // as its standalone and snprintf-ing it 
+            //validationpass = 1; 
+            sprintf(/*reason_out*/ fail_reason, "user doesnt exist in db, cant update what isnt there");
+            send_soap_fault(accept, FAULT_ACTION_NOT_SUP, fail_reason);
+            printf("usernot in db");
+            return;
         }
     }
     printf("after loop validity check");

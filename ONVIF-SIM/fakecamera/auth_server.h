@@ -347,6 +347,7 @@ void *tcpserver(void *arg) {
                     // parsesetusers also the edgecases too
                     // now addition of that case that if any user 
                     // doesnt exist in csv the whole process will fail
+                    // also need to add the error faults
             }
             
                 else{

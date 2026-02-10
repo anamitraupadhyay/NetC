@@ -76,7 +76,35 @@ int validate_cred_edgecases(const char *user, const char *pass, char *reason_out
     return 1;
 }
 
+int validate_cred_edgecases_forsetuser(const char *user, const char *pass, char *reason_out) {
+    size_t u_len = strlen(user);
+    size_t p_len = strlen(pass);
 
+    // Window Size Check
+    if (u_len < MIN_USER_LEN || u_len > MAX_USER_LEN) {
+        sprintf(reason_out, "Username length must be between %d and %d", MIN_USER_LEN, MAX_USER_LEN);
+        return 0;
+    }
+    if (p_len < MIN_PASS_LEN || p_len > MAX_PASS_LEN) {
+        sprintf(reason_out, "Password length must be between %d and %d", MIN_PASS_LEN, MAX_PASS_LEN);
+        return 0;
+    }
+
+    // Username Equal to Password Check
+    if (strcmp(user, pass) == 0) {
+        strcpy(reason_out, "Password cannot be identical to Username");
+        return 0;
+    }
+    // load csv and check if username exist or not - wrong for this case
+    // as its utmost to check and not here its for later check
+    // at the inner if lock
+    /*if (user_exists_in_db(user)) {
+            strcpy(reason_out, "Username already exists");
+            return 0;
+            }*/
+
+    return 1;
+}
 
 
 inline void generate_nonce(char *nonce, size_t size){
