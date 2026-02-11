@@ -20,6 +20,7 @@
 #include "config.h"
 #include "dis_utils.h"
 #include "simpleparser.h"
+#include "interface_binding.h"
 
 // just blind trust for now
 // now some necessary altercations
@@ -66,14 +67,35 @@ void *tcpserver(void *arg) {
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(cfg1.server_port);
-    addr.sin_addr.s_addr = INADDR_ANY;// here about setting the ip?
-    // need to change the config loading and what about affect of the dhcp
+    
+    // Use interface binding if configured
+    if (get_bind_address(&addr.sin_addr) != 0) {
+        fprintf(stderr, "[Auth Server] Failed to get bind address\n");
+        close(sock);
+        return NULL;
+    }
+    
+    // Apply SO_BINDTODEVICE if interface name was specified
+    if (apply_interface_binding(sock) != 0) {
+        fprintf(stderr, "[Auth Server] Failed to bind to interface\n");
+        close(sock);
+        return NULL;
+    }
 
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr))) {
         perror("bind");
         close(sock);
         return NULL;
     }
+    
+    printf("TCP server bound to port %d", cfg1.server_port);
+    if (is_interface_binding_enabled()) {
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &addr.sin_addr, ip, sizeof(ip));
+        printf(" on %s", ip);
+    }
+    printf("\n");
+    
     listen(sock, 5);
 
     char buf[BUFFER_SIZE];

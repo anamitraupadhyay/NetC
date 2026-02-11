@@ -17,6 +17,7 @@
 
 //#include "config.h"
 #include "simpleparser.h"
+#include "interface_binding.h"
 
 static char g_cached_xml[BUFFER_SIZE];
 static size_t g_cached_xml_len = 0;
@@ -143,6 +144,15 @@ void initdevice_uuid(){
 }
 
 void getlocalip(char *buf, size_t size){
+    // If interface binding is enabled, use the bound IP
+    if (is_interface_binding_enabled()) {
+        if (get_bound_ip_address(buf, size) == 0) {
+            return;
+        }
+        // Fall through to default behavior if we can't get bound IP
+    }
+    
+    // Default behavior: connect to 8.8.8.8 to determine local IP
     int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if(sockfd<0){
         perror("socket");
