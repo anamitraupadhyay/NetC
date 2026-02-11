@@ -7,35 +7,46 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <stdio.h>
+#include <unistd.h>
 
-// Global variable to store the selected interface name or IP address
-static char g_bind_interface[IFNAMSIZ] = {0};
-static char g_bind_ip[INET_ADDRSTRLEN] = {0};
+// Internal state storage - using static inline functions to avoid multiple definition issues
+static inline char* get_bind_interface_storage(void) {
+    static char g_bind_interface[IFNAMSIZ] = {0};
+    return g_bind_interface;
+}
+
+static inline char* get_bind_ip_storage(void) {
+    static char g_bind_ip[INET_ADDRSTRLEN] = {0};
+    return g_bind_ip;
+}
 
 /**
  * Set the network interface to bind to
  * @param interface_name: Interface name (e.g., "eth0") or IP address (e.g., "192.168.1.100")
  * @return 0 on success, -1 on error
  */
-int set_bind_interface(const char *interface_name) {
+static inline int set_bind_interface(const char *interface_name) {
     if (!interface_name || strlen(interface_name) == 0) {
         return -1;
     }
+    
+    char *g_bind_interface = get_bind_interface_storage();
+    char *g_bind_ip = get_bind_ip_storage();
     
     // Check if it's an IP address
     struct in_addr addr;
     if (inet_pton(AF_INET, interface_name, &addr) == 1) {
         // It's an IP address
-        strncpy(g_bind_ip, interface_name, sizeof(g_bind_ip) - 1);
-        g_bind_ip[sizeof(g_bind_ip) - 1] = '\0';
+        strncpy(g_bind_ip, interface_name, INET_ADDRSTRLEN - 1);
+        g_bind_ip[INET_ADDRSTRLEN - 1] = '\0';
         g_bind_interface[0] = '\0';
         printf("[Interface Binding] Set to IP: %s\n", g_bind_ip);
         return 0;
     }
     
     // It's an interface name
-    strncpy(g_bind_interface, interface_name, sizeof(g_bind_interface) - 1);
-    g_bind_interface[sizeof(g_bind_interface) - 1] = '\0';
+    strncpy(g_bind_interface, interface_name, IFNAMSIZ - 1);
+    g_bind_interface[IFNAMSIZ - 1] = '\0';
     g_bind_ip[0] = '\0';
     printf("[Interface Binding] Set to interface: %s\n", g_bind_interface);
     return 0;
@@ -47,7 +58,10 @@ int set_bind_interface(const char *interface_name) {
  * @param size: Size of the buffer
  * @return 0 on success, -1 on error
  */
-int get_bound_ip_address(char *ip_buf, size_t size) {
+static inline int get_bound_ip_address(char *ip_buf, size_t size) {
+    char *g_bind_interface = get_bind_interface_storage();
+    char *g_bind_ip = get_bind_ip_storage();
+    
     if (g_bind_ip[0] != '\0') {
         // IP was directly specified
         strncpy(ip_buf, g_bind_ip, size - 1);
@@ -72,8 +86,8 @@ int get_bound_ip_address(char *ip_buf, size_t size) {
         
         if (strcmp(ifa->ifa_name, g_bind_interface) == 0 && 
             ifa->ifa_addr->sa_family == AF_INET) {
-            struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
-            inet_ntop(AF_INET, &addr->sin_addr, ip_buf, size);
+            struct sockaddr_in *saddr = (struct sockaddr_in *)ifa->ifa_addr;
+            inet_ntop(AF_INET, &saddr->sin_addr, ip_buf, size);
             freeifaddrs(ifaddr);
             return 0;
         }
@@ -90,7 +104,10 @@ int get_bound_ip_address(char *ip_buf, size_t size) {
  * @param sockfd: Socket file descriptor
  * @return 0 on success, -1 on error
  */
-int apply_interface_binding(int sockfd) {
+static inline int apply_interface_binding(int sockfd) {
+    char *g_bind_interface = get_bind_interface_storage();
+    char *g_bind_ip = get_bind_ip_storage();
+    
     if (g_bind_interface[0] == '\0' && g_bind_ip[0] == '\0') {
         // No binding configured, skip
         return 0;
@@ -118,7 +135,10 @@ int apply_interface_binding(int sockfd) {
  * @param addr: Output parameter for the address
  * @return 0 on success (addr will be INADDR_ANY or specific IP), -1 on error
  */
-int get_bind_address(struct in_addr *addr) {
+static inline int get_bind_address(struct in_addr *addr) {
+    char *g_bind_interface = get_bind_interface_storage();
+    char *g_bind_ip = get_bind_ip_storage();
+    
     if (g_bind_ip[0] != '\0') {
         // Use specific IP
         if (inet_pton(AF_INET, g_bind_ip, addr) != 1) {
@@ -149,7 +169,10 @@ int get_bind_address(struct in_addr *addr) {
  * @param addr: Output parameter for the interface address
  * @return 0 on success, -1 on error
  */
-int get_multicast_interface(struct in_addr *addr) {
+static inline int get_multicast_interface(struct in_addr *addr) {
+    char *g_bind_interface = get_bind_interface_storage();
+    char *g_bind_ip = get_bind_ip_storage();
+    
     if (g_bind_ip[0] != '\0') {
         // Use specific IP
         if (inet_pton(AF_INET, g_bind_ip, addr) != 1) {
@@ -180,7 +203,9 @@ int get_multicast_interface(struct in_addr *addr) {
  * Check if interface binding is configured
  * @return 1 if configured, 0 otherwise
  */
-int is_interface_binding_enabled(void) {
+static inline int is_interface_binding_enabled(void) {
+    char *g_bind_interface = get_bind_interface_storage();
+    char *g_bind_ip = get_bind_ip_storage();
     return (g_bind_interface[0] != '\0' || g_bind_ip[0] != '\0');
 }
 

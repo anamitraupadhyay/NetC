@@ -198,7 +198,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    local_addr.sin_port = 0;  // Let kernel pick teh po
+    local_addr.sin_port = 0;  // Let kernel pick the port
     
     if (bind(sockfd, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
         perror("bind() failed");
