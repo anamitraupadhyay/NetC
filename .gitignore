@@ -6,6 +6,7 @@ ONVIF-SIM/fakecamera/auth.h
 ONVIF-SIM/fakecamera/trial.c
 ONVIF-SIM/fakecamera/getcapabilities.xml
 ONVIF-SIM/fakecamera/main
+ONVIF-SIM/CamDiscoverer/camdis
 
 CMakeFiles/
 cmake_install.cmake
