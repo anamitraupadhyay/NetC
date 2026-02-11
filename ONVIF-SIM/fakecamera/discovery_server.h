@@ -17,6 +17,7 @@
 //#include "config.h"
 //#include "simpleparser.h"
 #include "dis_utils.h"
+#include "interface_binding.h"
 
 // from close observation there are 5 fields to be extracted
 // 1. is it probe or discovery or not
@@ -86,7 +87,20 @@ void *discovery(void *arg) {
     memset(&recvside, 0, sizeof(recvside));
     recvside.sin_family = AF_INET;
     recvside.sin_port = htons(DISCOVERY_PORT);
-    recvside.sin_addr.s_addr = INADDR_ANY;
+    
+    // Use interface binding if configured
+    if (get_bind_address(&recvside.sin_addr) != 0) {
+        fprintf(stderr, "[Discovery] Failed to get bind address\n");
+        close(recieversocketudp);
+        return NULL;
+    }
+    
+    // Apply SO_BINDTODEVICE if interface name was specified
+    if (apply_interface_binding(recieversocketudp) != 0) {
+        fprintf(stderr, "[Discovery] Failed to bind to interface\n");
+        close(recieversocketudp);
+        return NULL;
+    }
     
     if (bind(recieversocketudp,
              (struct sockaddr*)&recvside,
@@ -95,12 +109,24 @@ void *discovery(void *arg) {
         return NULL;
     }
     
-    printf("Bound to port %d\n", DISCOVERY_PORT);
+    printf("Bound to port %d", DISCOVERY_PORT);
+    if (is_interface_binding_enabled()) {
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &recvside.sin_addr, ip, sizeof(ip));
+        printf(" on %s", ip);
+    }
+    printf("\n");
     
     /* Join multicast group - THIS IS THE KEY PART */
     struct ip_mreq mreq;
     mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
-    mreq.imr_interface.s_addr = INADDR_ANY;
+    
+    // Use specific interface for multicast if configured
+    if (get_multicast_interface(&mreq.imr_interface) != 0) {
+        fprintf(stderr, "[Discovery] Failed to get multicast interface\n");
+        close(recieversocketudp);
+        return NULL;
+    }
     
     if (setsockopt(recieversocketudp, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
         perror("multicast join");

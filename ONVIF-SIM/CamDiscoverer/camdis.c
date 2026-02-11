@@ -10,6 +10,8 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <getopt.h>
+#include "interface_binding.h"
 
 #define DISCOVERY_PORT 3702
 #define MULTICAST_ADDR "239.255.255.250"
@@ -97,7 +99,57 @@ int extract_device_name(const char *xml, char *name, size_t size) {
     return 0;
 }
 
-int main() { 
+void print_usage(const char *prog_name) {
+    printf("ONVIF Camera Discoverer\n");
+    printf("Usage: %s [OPTIONS]\n", prog_name);
+    printf("\nOptions:\n");
+    printf("  -i, --interface <name>   Bind to specific network interface (e.g., eth0, wlan0)\n");
+    printf("  -a, --address <ip>       Bind to specific IP address (e.g., 192.168.1.100)\n");
+    printf("  -h, --help               Show this help message\n");
+    printf("\nExamples:\n");
+    printf("  %s -i eth0               # Discover on eth0 interface\n", prog_name);
+    printf("  %s -a 192.168.1.100      # Discover using specific IP\n", prog_name);
+    printf("\nNote: Without -i or -a, discovers on ALL network interfaces\n");
+}
+
+int main(int argc, char *argv[]) {
+    int opt;
+    char *interface_spec = NULL;
+    
+    static struct option long_options[] = {
+        {"interface", required_argument, 0, 'i'},
+        {"address",   required_argument, 0, 'a'},
+        {"help",      no_argument,       0, 'h'},
+        {0, 0, 0, 0}
+    };
+    
+    // Parse command line arguments
+    while ((opt = getopt_long(argc, argv, "i:a:h", long_options, NULL)) != -1) {
+        switch (opt) {
+            case 'i':
+            case 'a':
+                interface_spec = optarg;
+                break;
+            case 'h':
+                print_usage(argv[0]);
+                return 0;
+            default:
+                print_usage(argv[0]);
+                return 1;
+        }
+    }
+    
+    // Set interface binding if specified
+    if (interface_spec != NULL) {
+        if (set_bind_interface(interface_spec) != 0) {
+            fprintf(stderr, "Error: Failed to set interface binding to '%s'\n", interface_spec);
+            return 1;
+        }
+    } else {
+        printf("[Warning] No interface specified. Discovering on ALL network interfaces.\n");
+        printf("          Use -i <interface> or -a <ip> to bind to a specific network.\n\n");
+    }
+    
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     int reuse = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
@@ -131,14 +183,35 @@ int main() {
     struct sockaddr_in local_addr;// = {0};
     memset(&local_addr, 0, sizeof(local_addr));
     local_addr.sin_family = AF_INET;
-    local_addr.sin_addr.s_addr = INADDR_ANY;
-    local_addr.sin_port = 0;  // Let kernel pick teh po
+    
+    // Use interface binding if configured
+    if (get_bind_address(&local_addr.sin_addr) != 0) {
+        fprintf(stderr, "[Discovery Client] Failed to get bind address\n");
+        close(sockfd);
+        return 1;
+    }
+    
+    // Apply SO_BINDTODEVICE if interface name was specified
+    if (apply_interface_binding(sockfd) != 0) {
+        fprintf(stderr, "[Discovery Client] Failed to bind to interface\n");
+        close(sockfd);
+        return 1;
+    }
+    
+    local_addr.sin_port = 0;  // Let kernel pick the port
     
     if (bind(sockfd, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
         perror("bind() failed");
     }
     struct ip_mreq mreq = {0};
-    mreq.imr_interface.s_addr = INADDR_ANY;
+    
+    // Use specific interface for multicast if configured
+    if (get_multicast_interface(&mreq.imr_interface) != 0) {
+        fprintf(stderr, "[Discovery Client] Failed to get multicast interface\n");
+        close(sockfd);
+        return 1;
+    }
+    
     mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
 
     if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
