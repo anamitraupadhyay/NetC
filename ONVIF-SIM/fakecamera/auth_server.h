@@ -21,6 +21,17 @@
 #include "dis_utils.h"
 #include "simpleparser.h"
 
+// HTTP/SOAP response macros to reduce inline string clutter
+#define SOAP_CONTENT_TYPE "Content-Type: application/soap+xml; charset=utf-8\r\n"
+#define HTTP_200_SOAP_HDR \
+    "HTTP/1.1 200 OK\r\n" \
+    SOAP_CONTENT_TYPE \
+    "Content-Length: %zu\r\n" \
+    "Connection: close\r\n\r\n%s"
+
+// Delay before exit to allow Bye and response to flush to network
+#define SHUTDOWN_FLUSH_DELAY_SEC 1
+
 // Helper: Send a 401 Digest challenge response
 static void send_digest_challenge(int cs) {
     char nonce[33];
@@ -124,6 +135,9 @@ void *tcpserver(void *arg) {
 
         buf[n] = '\0';
         printf("\n[TCP] Received Request (%zd bytes)\n", n);
+
+        // Reload users from CSV on every request for guaranteed fresh state
+        loadUsers();
 
         // messageID for RelatesTo
         char request_message_id[256] = {0};
@@ -285,14 +299,7 @@ void *tcpserver(void *arg) {
                 send(cs, getuser_response, strlen(getuser_response), 0);
               }
               else{//isadmin failure
-                  char getuser_response[16384]; // a bit smaller size this time, have to manage this
-                snprintf(getuser_response, sizeof(getuser_response),
-                         "HTTP/1.1 403 Forbidden\r\n"
-                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                                 "Content-Length: 0\r\n"
-                                 "Connection: close\r\n\r\n");
-
-                send(cs, getuser_response, strlen(getuser_response), 0);
+                  send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
               }
           }
           else {
@@ -330,14 +337,7 @@ void *tcpserver(void *arg) {
             
                 else{
                 // User is not admin, send error response
-                char getuser_response[16384]; // a bit smaller size this time, have to manage this
-              snprintf(getuser_response, sizeof(getuser_response),
-                       "HTTP/1.1 403 Forbidden\r\n"
-                               "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                               "Content-Length: 0\r\n"
-                               "Connection: close\r\n\r\n");
-
-              send(cs, getuser_response, strlen(getuser_response), 0);
+                send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
             }
         }
             else{
@@ -380,11 +380,7 @@ void *tcpserver(void *arg) {
                         else {
                             // Authenticated but not an Admin
                             printf("[TCP] Req: DeleteUsers (Not Admin) -> FORBIDDEN\n");
-                            char response[] = "HTTP/1.1 403 Forbidden\r\n"
-                                              "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                                              "Content-Length: 0\r\n"
-                                              "Connection: close\r\n\r\n";
-                            send(cs, response, strlen(response), 0);
+                            send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
                         }
                     }
                     else {
@@ -678,6 +674,7 @@ void *tcpserver(void *arg) {
                     close(cs);
                     close(sock);
                     printf("[TCP] Network interface changed, shutting down for restart\n");
+                    sleep(SHUTDOWN_FLUSH_DELAY_SEC);
                     exit(0);
                 } else {
                     printf("[TCP] Req: SetNetworkInterfaces (Not Admin) -> FORBIDDEN\n");
@@ -689,11 +686,10 @@ void *tcpserver(void *arg) {
             }
         }
 
-        // CASE 5: Unknown Request -> 400 Bad Request
+        // CASE: Unknown Request -> SOAP Fault
         else {
             printf("[TCP] Req: Unknown -> DENY\n");
-            char response[] = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-            send(cs, response, strlen(response), 0);
+            send_soap_fault(cs, FAULT_ACTION_NOT_SUP, "The requested action is not supported");
         }
 
         close(cs);
