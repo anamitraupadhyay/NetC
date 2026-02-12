@@ -94,6 +94,86 @@ int has_any_authentication(const char *request) {
     return 0;
 }
 
+// Validate that a string looks like a valid IPv4 address (digits and dots only)
+static int is_valid_ipv4(const char *s) {
+    if (!s || !s[0]) return 0;
+    for (int i = 0; s[i]; i++) {
+        if (s[i] != '.' && (s[i] < '0' || s[i] > '9')) return 0;
+    }
+    struct in_addr tmp;
+    return inet_pton(AF_INET, s, &tmp) == 1;
+}
+
+// Validate that a string is a numeric prefix length (0-32)
+static int is_valid_prefix(const char *s) {
+    if (!s || !s[0]) return 0;
+    for (int i = 0; s[i]; i++) {
+        if (s[i] < '0' || s[i] > '9') return 0;
+    }
+    int val = atoi(s);
+    return val >= 0 && val <= 32;
+}
+
+// Handler for GetServices - returns Device and Media service endpoints
+static void handle_GetServices(int cs, const char *msg_id, const char *req_buf, config *cfg) {
+    char device_url[256], media_url[256];
+    snprintf(device_url, sizeof(device_url), "http://%s:%d/onvif/device_service",
+             cfg->ip_addr, cfg->server_port);
+    snprintf(media_url, sizeof(media_url), "http://%s:%d/onvif/media_service",
+             cfg->ip_addr, cfg->server_port);
+
+    // Check if client wants capabilities included
+    int include_caps = 0;
+    if (strstr(req_buf, "IncludeCapability>true</") ||
+        strstr(req_buf, "IncludeCapability>true<")) {
+        include_caps = 1;
+    }
+
+    const char *dev_caps = include_caps ?
+        "<tds:Capabilities>"
+            "<tds:Network><tds:IPFilter>false</tds:IPFilter></tds:Network>"
+        "</tds:Capabilities>" : "";
+    const char *med_caps = include_caps ?
+        "<tds:Capabilities>"
+            "<trt:ProfileCapabilities>"
+                "<trt:MaximumNumberOfProfiles>10</trt:MaximumNumberOfProfiles>"
+            "</trt:ProfileCapabilities>"
+        "</tds:Capabilities>" : "";
+
+    char body[8192];
+    snprintf(body, sizeof(body),
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+        "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
+        "xmlns:tt=\"http://www.onvif.org/ver10/schema\" "
+        "xmlns:trt=\"http://www.onvif.org/ver10/media/wsdl\" "
+        "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">"
+        "<s:Header>"
+            "<a:Action>http://www.onvif.org/ver10/device/wsdl/GetServicesResponse</a:Action>"
+            "<a:RelatesTo>%s</a:RelatesTo>"
+        "</s:Header>"
+        "<s:Body>"
+            "<tds:GetServicesResponse>"
+                "<tds:Service>"
+                    "<tds:Namespace>http://www.onvif.org/ver10/device/wsdl</tds:Namespace>"
+                    "<tds:XAddr>%s</tds:XAddr>"
+                    "<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
+                    "%s"
+                "</tds:Service>"
+                "<tds:Service>"
+                    "<tds:Namespace>http://www.onvif.org/ver10/media/wsdl</tds:Namespace>"
+                    "<tds:XAddr>%s</tds:XAddr>"
+                    "<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
+                    "%s"
+                "</tds:Service>"
+            "</tds:GetServicesResponse>"
+        "</s:Body>"
+        "</s:Envelope>",
+        msg_id, device_url, dev_caps, media_url, med_caps);
+
+    send_soap_ok(cs, body);
+}
+
 void *tcpserver(void *arg) {
     (void)arg;
     loadUsers();
@@ -528,6 +608,19 @@ void *tcpserver(void *arg) {
                     if (new_gw[0]) {
                         // setdnsinxml is a generic XML tag value setter, reused here for gateway
                         setdnsinxml(new_gw, "<gateway>", "</gateway>");
+                        // Apply route to OS immediately (validate input first)
+                        if (is_valid_ipv4(new_gw)) {
+                            char cmd[256];
+                            snprintf(cmd, sizeof(cmd),
+                                     "ip route del default 2>/dev/null; ip route add default via %s",
+                                     new_gw);
+                            int ret = system(cmd);
+                            if (ret != 0) {
+                                fprintf(stderr, "[TCP] Failed to apply gateway to OS (exit %d, requires root)\n", ret);
+                            }
+                        } else {
+                            fprintf(stderr, "[TCP] Invalid gateway format, skipping OS apply\n");
+                        }
                     }
 
                     const char *soap_body =
@@ -635,6 +728,20 @@ void *tcpserver(void *arg) {
                         setdnsinxml(new_dhcp, "<fromdhcp>", "</fromdhcp>");
                     }
 
+                    // Apply IP to OS immediately so reconciliation sees the new IP on restart
+                    if (new_ip[0] && new_prefix[0] && is_valid_ipv4(new_ip) && is_valid_prefix(new_prefix)) {
+                        char cmd[256];
+                        snprintf(cmd, sizeof(cmd),
+                                 "ip addr flush dev eth0 && ip addr add %s/%s dev eth0 && ip link set eth0 up",
+                                 new_ip, new_prefix);
+                        int ret = system(cmd);
+                        if (ret != 0) {
+                            fprintf(stderr, "[TCP] Failed to apply IP to OS (exit %d, requires root)\n", ret);
+                        }
+                    } else if (new_ip[0] || new_prefix[0]) {
+                        fprintf(stderr, "[TCP] Invalid IP/prefix format, skipping OS apply\n");
+                    }
+
                     // Send SOAP success response before shutdown
                     const char *soap_body =
                         "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
@@ -684,6 +791,12 @@ void *tcpserver(void *arg) {
                 printf("[TCP] Req: SetNetworkInterfaces (No Auth) -> CHALLENGE\n");
                 send_digest_challenge(cs);
             }
+        }
+
+        // CASE: GetServices
+        else if (strstr(buf, "GetServices")) {
+            printf("[TCP] Req: GetServices -> ALLOWED\n");
+            handle_GetServices(cs, request_message_id, buf, &cfg1);
         }
 
         // CASE: Unknown Request -> SOAP Fault
