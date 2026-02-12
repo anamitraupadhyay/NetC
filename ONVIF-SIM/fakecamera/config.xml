@@ -23,8 +23,8 @@
         <hardware_id>1.0</hardware_id>
         <type>IPv4</type>
         <profile>streaming</profile>
-        <hardware>VMS</hardware>
-        <location>India</location>
+        <hardware>VSaasEdgeBox</hardware>
+        <location>Any</location>
         <auth>0</auth>
         <hostname>aupc</hostname>
         <FromDHCP>false</FromDHCP>
