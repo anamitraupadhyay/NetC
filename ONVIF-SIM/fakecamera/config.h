@@ -144,5 +144,26 @@ const char *PROBE_MATCH_TEMPLATE =
             "</tds:GetHostnameResponse>"
         "</s:Body>"
         "</s:Envelope>";
-    
+
+    const char *WS_DISCOVERY_BYE_TEMPLATE =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+        "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
+        "xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\">"
+        "<s:Header>"
+            "<a:Action s:mustUnderstand=\"1\">"
+                "http://schemas.xmlsoap.org/ws/2005/04/discovery/Bye"
+            "</a:Action>"
+            "<a:MessageID>urn:uuid:%s</a:MessageID>"
+            "<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>"
+        "</s:Header>"
+        "<s:Body>"
+            "<d:Bye>"
+                "<a:EndpointReference>"
+                    "<a:Address>urn:uuid:%s</a:Address>"
+                "</a:EndpointReference>"
+            "</d:Bye>"
+        "</s:Body>"
+        "</s:Envelope>";
+
 #endif /* CONFIG_H */

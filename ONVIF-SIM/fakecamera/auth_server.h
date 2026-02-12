@@ -21,6 +21,40 @@
 #include "dis_utils.h"
 #include "simpleparser.h"
 
+// Helper: Send a 401 Digest challenge response
+static void send_digest_challenge(int cs) {
+    char nonce[33];
+    snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
+            rand(), rand(), rand(), rand());
+
+    char response[1024];
+    snprintf(response, sizeof(response),
+             "HTTP/1.1 401 Unauthorized\r\n"
+             "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
+             "Content-Type: application/soap+xml; charset=utf-8\r\n"
+             "Content-Length: 0\r\n"
+             "Connection: close\r\n\r\n",
+             nonce);
+
+    send(cs, response, strlen(response), 0);
+}
+
+// Helper: Send a SOAP success response with given body
+static void send_soap_ok(int cs, const char *soap_body) {
+    char http_response[4096];
+    int len = snprintf(http_response, sizeof(http_response),
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                "Content-Length: %zu\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                "%s",
+                strlen(soap_body),
+                soap_body);
+
+    send(cs, http_response, len, 0);
+}
+
 // just blind trust for now
 // now some necessary altercations
 // integration of csvparser and also checking if that user exist or not
@@ -159,21 +193,7 @@ void *tcpserver(void *arg) {
                 }
             }
             else{
-                // Random nonce generation
-                char nonce[33];
-                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
-                        rand(), rand(), rand(), rand());
-
-                char response[1024];
-                snprintf(response, sizeof(response),
-                         "HTTP/1.1 401 Unauthorized\r\n"
-                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
-                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                         "Content-Length: 0\r\n"
-                         "Connection: close\r\n\r\n",
-                         nonce);
-
-                send(cs, response, strlen(response), 0);
+                send_digest_challenge(cs);
             }
         }
         else if(strstr(buf, "GetHostname")){
@@ -245,22 +265,7 @@ void *tcpserver(void *arg) {
                 // --- SUB-CASE 2B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
                 // We MUST send WWW-Authenticate or the client will stop trying.
                 printf("[TCP] Req: GetDeviceInformation (No Auth) -> CHALLENGE\n");
-
-                // Random nonce generation
-                char nonce[33];
-                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
-                        rand(), rand(), rand(), rand());
-
-                char response[1024];
-                snprintf(response, sizeof(response),
-                         "HTTP/1.1 401 Unauthorized\r\n"
-                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
-                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                         "Content-Length: 0\r\n"
-                         "Connection: close\r\n\r\n",
-                         nonce);
-
-                send(cs, response, strlen(response), 0);
+                send_digest_challenge(cs);
             }
         }
         // CASE 3: GetUser (3 way handshake as ususal)
@@ -306,22 +311,7 @@ void *tcpserver(void *arg) {
             // --- SUB-CASE 3B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
                 // We MUST send WWW-Authenticate or the client will stop trying.
                 printf("[TCP] Req: GetUsers (No Auth) -> CHALLENGE\n");
-
-                // Random nonce generation
-                char nonce[33];
-                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
-                        rand(), rand(), rand(), rand());
-
-                char response[1024];
-                snprintf(response, sizeof(response),
-                         "HTTP/1.1 401 Unauthorized\r\n"
-                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
-                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                         "Content-Length: 0\r\n"
-                         "Connection: close\r\n\r\n",
-                         nonce);
-
-                send(cs, response, strlen(response), 0);
+                send_digest_challenge(cs);
           }
         }
         // CASE 4 : SetUsers
@@ -363,26 +353,8 @@ void *tcpserver(void *arg) {
             }
         }
             else{
-                //
-                // // --- SUB-CASE 4B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
-                    // We MUST send WWW-Authenticate or the client will stop trying.
-                    printf("[TCP] Req: GetUsers (No Auth) -> CHALLENGE\n");
-    
-                    // Random nonce generation
-                    char nonce[33];
-                    snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
-                            rand(), rand(), rand(), rand());
-    
-                    char response[1024];
-                    snprintf(response, sizeof(response),
-                             "HTTP/1.1 401 Unauthorized\r\n"
-                             "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
-                             "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                             "Content-Length: 0\r\n"
-                             "Connection: close\r\n\r\n",
-                             nonce);
-    
-                    send(cs, response, strlen(response), 0);
+                printf("[TCP] Req: SetUsers (No Auth) -> CHALLENGE\n");
+                send_digest_challenge(cs);
             }
     }
         // CASE 5 : DeleteUsers
@@ -403,6 +375,7 @@ void *tcpserver(void *arg) {
                             for (int i = 0; i < numofuserssentdelete; i++) {
                                 deluserscsv(usersdelarray[i].username);
                             }
+                            loadUsers();
         
                             // 3. Build the ONVIF-compliant SOAP Success Response
                             const char *soap_body =
@@ -440,18 +413,7 @@ void *tcpserver(void *arg) {
                     else {
                         // No authentication provided -> Challenge the client
                         printf("[TCP] Req: DeleteUsers (No Auth) -> CHALLENGE\n");
-                        char nonce[33];
-                        snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", rand(), rand(), rand(), rand());
-        
-                        char response[1024];
-                        snprintf(response, sizeof(response),
-                                 "HTTP/1.1 401 Unauthorized\r\n"
-                                 "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
-                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                                 "Content-Length: 0\r\n"
-                                 "Connection: close\r\n\r\n",
-                                 nonce);
-                        send(cs, response, strlen(response), 0);
+                        send_digest_challenge(cs);
                     }
                 }
         // CASE 6 : CreateUsers
@@ -483,23 +445,8 @@ void *tcpserver(void *arg) {
           else {
             // --- SUB-CASE 4B: NO AUTH -> CHALLENGE (Send 401 + WWW-Authenticate) ---
                 // We MUST send WWW-Authenticate or the client will stop trying.
-                printf("[TCP] Req: GetUsers (No Auth) -> CHALLENGE\n");
-
-                // Random nonce generation
-                char nonce[33];
-                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
-                        rand(), rand(), rand(), rand());
-
-                char response[1024];
-                snprintf(response, sizeof(response),
-                         "HTTP/1.1 401 Unauthorized\r\n"
-                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
-                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                         "Content-Length: 0\r\n"
-                         "Connection: close\r\n\r\n",
-                         nonce);
-
-                send(cs, response, strlen(response), 0);
+                printf("[TCP] Req: CreateUsers (No Auth) -> CHALLENGE\n");
+                send_digest_challenge(cs);
         }
     }
 
@@ -545,20 +492,8 @@ void *tcpserver(void *arg) {
                 }
             }
             else{
-                char nonce[33];
-                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x",
-                        rand(), rand(), rand(), rand());
-
-                char response[1024];
-                snprintf(response, sizeof(response),
-                         "HTTP/1.1 401 Unauthorized\r\n"
-                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
-                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                         "Content-Length: 0\r\n"
-                         "Connection: close\r\n\r\n",
-                         nonce);
-
-                send(cs, response, strlen(response), 0);
+                printf("[TCP] Req: SetDNS (No Auth) -> CHALLENGE\n");
+                send_digest_challenge(cs);
             }
         }
         else if(strstr(buf, "GetDNS")){
@@ -617,6 +552,38 @@ void *tcpserver(void *arg) {
         
             send(cs, response, strlen(response), 0);
         }
+        // CASE: SetNetworkDefaultGateway
+        else if(strstr(buf, "SetNetworkDefaultGateway")){
+            if (has_any_authentication(buf)) {
+                char user[256] = {0};
+                extract_header_val(buf, "username", user, sizeof(user));
+
+                if (is_admin(buf, user)) {
+                    printf("[TCP] Req: SetNetworkDefaultGateway (Auth+Admin) -> ALLOWED\n");
+                    char new_gw[64] = {0};
+                    extract_tag_value(buf, "IPv4Address", new_gw, sizeof(new_gw));
+
+                    if (new_gw[0]) {
+                        setdnsinxml(new_gw, "<gateway>", "</gateway>");
+                    }
+
+                    const char *soap_body =
+                        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                        "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" "
+                        "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                            "<soap:Body>"
+                                "<tds:SetNetworkDefaultGatewayResponse></tds:SetNetworkDefaultGatewayResponse>"
+                            "</soap:Body>"
+                        "</soap:Envelope>";
+                    send_soap_ok(cs, soap_body);
+                } else {
+                    send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
+                }
+            } else {
+                printf("[TCP] Req: SetNetworkDefaultGateway (No Auth) -> CHALLENGE\n");
+                send_digest_challenge(cs);
+            }
+        }
         
         // CASE: GetNetworkInterfaces
         else if (strstr(buf, "GetNetworkInterfaces")) {
@@ -635,9 +602,11 @@ void *tcpserver(void *arg) {
 
                     char soap_response[16384];
                     char eachtime[2048];
+                    char token_name[64];
                     for (int i = 0; i < count; i++) {
+                        snprintf(token_name, sizeof(token_name), "%s_token", ifaces[i].name);
                         snprintf(eachtime, sizeof(eachtime), NET_IF_ITEM,
-                                 ifaces[i].name,      // token
+                                 token_name,          // token (e.g. eth0_token)
                                  ifaces[i].name,      // Info Name
                                  ifaces[i].mac,       // Info Mac
                                  ifaces[i].mtu,       // Info MTU
@@ -665,19 +634,87 @@ void *tcpserver(void *arg) {
             } else {
                 // No Authentication -> Challenge
                 printf("[TCP] Req: GetNetworkInterfaces (No Auth) -> CHALLENGE\n");
-                char nonce[33];
-                snprintf(nonce, sizeof(nonce), "%08x%08x%08x%08x", rand(), rand(), rand(), rand());
-                char response[1024];
-                snprintf(response, sizeof(response),
-                         "HTTP/1.1 401 Unauthorized\r\n"
-                         "WWW-Authenticate: Digest realm=\"ONVIF_Device\", qop=\"auth\", nonce=\"%s\", algorithm=MD5\r\n"
-                         "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                         "Content-Length: 0\r\n"
-                         "Connection: close\r\n\r\n", nonce);
-                send(cs, response, strlen(response), 0);
+                send_digest_challenge(cs);
             }
         }
-        else if(strstr(buf, "SetNetworkInterfaces")){}
+        else if(strstr(buf, "SetNetworkInterfaces")){
+            if (has_any_authentication(buf)) {
+                char user[256] = {0};
+                extract_header_val(buf, "username", user, sizeof(user));
+
+                if (is_admin(buf, user)) {
+                    printf("[TCP] Req: SetNetworkInterfaces (Auth+Admin) -> ALLOWED\n");
+
+                    // Extract interface token from request to identify which interface
+                    char req_token[64] = {0};
+                    extract_tag_value(buf, "InterfaceToken", req_token, sizeof(req_token));
+
+                    // Extract IPv4 settings if present
+                    char new_ip[64] = {0};
+                    char new_prefix[16] = {0};
+                    char new_dhcp[8] = {0};
+                    extract_tag_value(buf, "tt:Address", new_ip, sizeof(new_ip));
+                    extract_tag_value(buf, "tt:PrefixLength", new_prefix, sizeof(new_prefix));
+                    extract_tag_value(buf, "tt:DHCP", new_dhcp, sizeof(new_dhcp));
+
+                    // Update config.xml with new network settings
+                    if (new_ip[0]) {
+                        setdnsinxml(new_ip, "<addr>", "</addr>");
+                    }
+                    if (new_prefix[0]) {
+                        setdnsinxml(new_prefix, "<subnet>", "</subnet>");
+                    }
+                    if (new_dhcp[0]) {
+                        setdnsinxml(new_dhcp, "<fromdhcp>", "</fromdhcp>");
+                    }
+
+                    // Send SOAP success response before shutdown
+                    const char *soap_body =
+                        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                        "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" "
+                        "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                            "<soap:Body>"
+                                "<tds:SetNetworkInterfacesResponse>"
+                                    "<tds:RebootNeeded>true</tds:RebootNeeded>"
+                                "</tds:SetNetworkInterfacesResponse>"
+                            "</soap:Body>"
+                        "</soap:Envelope>";
+                    send_soap_ok(cs, soap_body);
+
+                    // Send WS-Discovery Bye multicast message
+                    int bye_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+                    if (bye_sock >= 0) {
+                        struct sockaddr_in mcast_addr = {0};
+                        mcast_addr.sin_family = AF_INET;
+                        mcast_addr.sin_port = htons(DISCOVERY_PORT);
+                        inet_pton(AF_INET, MULTICAST_ADDR, &mcast_addr.sin_addr);
+
+                        char bye_msg_id[46];
+                        generate_messageid(bye_msg_id, sizeof(bye_msg_id));
+
+                        char bye_buf[2048];
+                        snprintf(bye_buf, sizeof(bye_buf), WS_DISCOVERY_BYE_TEMPLATE,
+                                 bye_msg_id, device_uuid);
+
+                        sendto(bye_sock, bye_buf, strlen(bye_buf), 0,
+                               (struct sockaddr *)&mcast_addr, sizeof(mcast_addr));
+                        printf("[TCP] Sent WS-Discovery Bye message\n");
+                        close(bye_sock);
+                    }
+
+                    close(cs);
+                    close(sock);
+                    printf("[TCP] Network interface changed, shutting down for restart\n");
+                    exit(0);
+                } else {
+                    printf("[TCP] Req: SetNetworkInterfaces (Not Admin) -> FORBIDDEN\n");
+                    send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
+                }
+            } else {
+                printf("[TCP] Req: SetNetworkInterfaces (No Auth) -> CHALLENGE\n");
+                send_digest_challenge(cs);
+            }
+        }
 
         // CASE 5: Unknown Request -> 400 Bad Request
         else {

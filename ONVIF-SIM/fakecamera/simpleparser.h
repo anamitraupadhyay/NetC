@@ -176,7 +176,10 @@ int scan_interfaces(Interfacedata *data, int maxitems/*macro for now*/){
     int count = 0;
     for (ifa = ifaddr; ifa != NULL && count < maxitems; ifa = ifa->ifa_next){
         if(ifa->ifa_addr == NULL) continue;
-        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0) {
+        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0
+            && strncmp(ifa->ifa_name, "docker", 6) != 0
+            && strncmp(ifa->ifa_name, "br-", 3) != 0
+            && strncmp(ifa->ifa_name, "veth", 4) != 0) {
                     strncpy(data[count].name, ifa->ifa_name, 31);
                     
                     struct sockaddr_in *paddr = (struct sockaddr_in *)ifa->ifa_addr;
