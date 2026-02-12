@@ -533,8 +533,8 @@ void *tcpserver(void *arg) {
                     //actual operations with send success
                     char thattobeset[256];
                     extract_tag_value(buf, "FromDHCP", thattobeset, sizeof(thattobeset)); // mandatory
-                    char tagopen[] = "<fromdhcp>";
-                    char tagclose[] = "</fromdhcp>";
+                    char tagopen[] = "<FromDHCP>";
+                    char tagclose[] = "</FromDHCP>";
                     setdnsinxml(thattobeset, tagopen, tagclose);
                     // for optional handling need a whole checkflow
                     optionalhandlingsdns(buf);
@@ -760,7 +760,7 @@ void *tcpserver(void *arg) {
                         setdnsinxml(new_prefix, "<subnet>", "</subnet>");
                     }
                     if (new_dhcp[0]) {
-                        setdnsinxml(new_dhcp, "<fromdhcp>", "</fromdhcp>");
+                        setdnsinxml(new_dhcp, "<FromDHCP>", "</FromDHCP>");
                     }
 
                     // Apply IP to OS immediately so reconciliation sees the new IP on restart
