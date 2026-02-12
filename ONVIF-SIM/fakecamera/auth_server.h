@@ -173,13 +173,13 @@ void *tcpserver(void *arg) {
                 extract_header_val(buf, "username", user, sizeof(user));
                 
                 if(is_admin(buf, user)){
-                    // processing function
-                    // loadxml and edit there and success response
-                    //sethostname exist in unistd.h, what? superuser is required
                     char hostnamearr[64];
-                    //parsexml for hostname
                     extract_tag_value(buf, "hostname", hostnamearr, sizeof(hostnamearr));
                     sethostnameinxml(hostnamearr);
+                    // Also attempt to set OS hostname (requires root/CAP_SYS_ADMIN)
+                    if (sethostname(hostnamearr, strlen(hostnamearr)) != 0) {
+                        perror("[TCP] Failed to set OS hostname");
+                    }
                     const char *soap_body =
                         "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                         "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
