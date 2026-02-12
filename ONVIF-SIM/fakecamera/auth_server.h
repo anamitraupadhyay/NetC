@@ -114,6 +114,17 @@ static int is_valid_prefix(const char *s) {
     return val >= 0 && val <= 32;
 }
 
+// Validate that an interface name contains only safe characters (alphanumeric, dash, underscore)
+static int is_valid_iface_name(const char *s) {
+    if (!s || !s[0]) return 0;
+    for (int i = 0; s[i]; i++) {
+        char c = s[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '-' || c == '_')) return 0;
+    }
+    return 1;
+}
+
 // Handler for GetServices - returns Device and Media service endpoints
 static void handle_GetServices(int cs, const char *msg_id, const char *req_buf, config *cfg) {
     char device_url[256], media_url[256];
@@ -709,6 +720,21 @@ void *tcpserver(void *arg) {
                         printf("[TCP] SetNetworkInterfaces for token: %s\n", req_token);
                     }
 
+                    // Resolve actual interface name from token (e.g. "eth0_token" -> "eth0")
+                    char iface_name[32] = "eth0"; // Default fallback
+                    if (req_token[0]) {
+                        char *suffix = strstr(req_token, "_token");
+                        if (suffix) {
+                            size_t name_len = suffix - req_token;
+                            if (name_len < sizeof(iface_name)) {
+                                strncpy(iface_name, req_token, name_len);
+                                iface_name[name_len] = '\0';
+                            }
+                        } else {
+                            strncpy(iface_name, req_token, sizeof(iface_name) - 1);
+                        }
+                    }
+
                     // Extract IPv4 settings if present
                     char new_ip[64] = {0};
                     char new_prefix[16] = {0};
@@ -729,17 +755,19 @@ void *tcpserver(void *arg) {
                     }
 
                     // Apply IP to OS immediately so reconciliation sees the new IP on restart
-                    if (new_ip[0] && new_prefix[0] && is_valid_ipv4(new_ip) && is_valid_prefix(new_prefix)) {
-                        char cmd[256];
+                    if (new_ip[0] && new_prefix[0] && is_valid_ipv4(new_ip) && is_valid_prefix(new_prefix)
+                        && is_valid_iface_name(iface_name)) {
+                        char cmd[512];
                         snprintf(cmd, sizeof(cmd),
-                                 "ip addr flush dev eth0 && ip addr add %s/%s dev eth0 && ip link set eth0 up",
-                                 new_ip, new_prefix);
+                                 "ip addr flush dev %s && ip addr add %s/%s dev %s && ip link set %s up",
+                                 iface_name, new_ip, new_prefix, iface_name, iface_name);
+                        printf("[TCP] Executing: %s\n", cmd);
                         int ret = system(cmd);
                         if (ret != 0) {
                             fprintf(stderr, "[TCP] Failed to apply IP to OS (exit %d, requires root)\n", ret);
                         }
                     } else if (new_ip[0] || new_prefix[0]) {
-                        fprintf(stderr, "[TCP] Invalid IP/prefix format, skipping OS apply\n");
+                        fprintf(stderr, "[TCP] Invalid IP/prefix/interface format, skipping OS apply\n");
                     }
 
                     // Send SOAP success response before shutdown
