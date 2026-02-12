@@ -174,19 +174,7 @@ void *tcpserver(void *arg) {
                             "</soap:Body>"
                         "</soap:Envelope>";
 
-                    char http_response[4096]; // Buffer size should be sufficient for this
-                    int len = snprintf(http_response, sizeof(http_response),
-                                "HTTP/1.1 200 OK\r\n"
-                                "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                                "Content-Length: %zu\r\n"
-                                "Connection: close\r\n"
-                                "\r\n"
-                                "%s",
-                                strlen(soap_body),
-                                soap_body);
-
-                    // 4. Send the response
-                    send(cs, http_response, len, 0);
+                    send_soap_ok(cs, soap_body);
                 }
                 else{
                     send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
@@ -387,18 +375,7 @@ void *tcpserver(void *arg) {
                                     "</soap:Body>"
                                 "</soap:Envelope>";
         
-                            char http_response[4096];
-                            int len = snprintf(http_response, sizeof(http_response),
-                                        "HTTP/1.1 200 OK\r\n"
-                                        "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                                        "Content-Length: %zu\r\n"
-                                        "Connection: close\r\n"
-                                        "\r\n"
-                                        "%s",
-                                        strlen(soap_body),
-                                        soap_body);
-        
-                            send(cs, http_response, len, 0);
+                            send_soap_ok(cs, soap_body);
                         }
                         else {
                             // Authenticated but not an Admin
@@ -467,25 +444,14 @@ void *tcpserver(void *arg) {
                     optionalhandlingsdns(buf);
                     applydnstoservice();
                    
-                                       const char *soap_body =
-                                           "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                                           "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
-                                               "<soap:Body>"
-                                                   "<tds:SetDNSResponse></tds:SetDNSResponse>"
-                                               "</soap:Body>"
-                                           "</soap:Envelope>";
-                   
-                                       char http_response[4096];
-                                       int len = snprintf(http_response, sizeof(http_response),
-                                                   "HTTP/1.1 200 OK\r\n"
-                                                   "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                                                   "Content-Length: %zu\r\n"
-                                                   "Connection: close\r\n"
-                                                   "\r\n"
-                                                   "%s",
-                                                   strlen(soap_body),
-                                                   soap_body);
-                                       send(cs, http_response, len, 0);
+                    const char *soap_body =
+                        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                        "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                            "<soap:Body>"
+                                "<tds:SetDNSResponse></tds:SetDNSResponse>"
+                            "</soap:Body>"
+                        "</soap:Envelope>";
+                    send_soap_ok(cs, soap_body);
                 }
                 else{// soapfault - try with admin priviledges}
                     send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
@@ -611,7 +577,8 @@ void *tcpserver(void *arg) {
                                  ifaces[i].mac,       // Info Mac
                                  ifaces[i].mtu,       // Info MTU
                                  ifaces[i].ip,        // IPv4 Address
-                                 ifaces[i].prefix_len // IPv4 Prefix
+                                 ifaces[i].prefix_len,// IPv4 Prefix
+                                 cfg1.fromdhcp        // DHCP from config
                         );
                         strcat(xml_buf, eachtime);
                     }

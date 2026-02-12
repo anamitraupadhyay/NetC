@@ -77,7 +77,7 @@ const char *NET_IF_ITEM =
                         "<tt:Address>%s</tt:Address>"
                         "<tt:PrefixLength>%d</tt:PrefixLength>"
                     "</tt:Manual>"
-                    "<tt:DHCP>true</tt:DHCP>"
+                    "<tt:DHCP>%s</tt:DHCP>"
                 "</tt:Config>"
             "</tds:IPv4>"
         "</tds:NetworkInterfaces>";
