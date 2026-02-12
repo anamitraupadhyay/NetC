@@ -26,7 +26,7 @@
         <profile>streaming</profile>
         <hardware>VMS</hardware>
         <location>India</location>
-        <auth>1</auth>
+        <auth>0</auth>
         <hostname>aupc</hostname>
         <FromDHCP>false</FromDHCP>
     </device>
