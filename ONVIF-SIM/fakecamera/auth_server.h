@@ -662,173 +662,235 @@ void *tcpserver(void *arg) {
         }
         
         // CASE: GetNetworkInterfaces
-        else if (strstr(buf, "GetNetworkInterfaces")) {
-            if (no_auth_mode || has_any_authentication(buf)) {
-                char user[256] = {0};
-                extract_header_val(buf, "username", user, sizeof(user));
-
-                // Check for Admin privileges
-                if (no_auth_mode || is_admin(buf, user)) {
-                    printf("[TCP] Req: GetNetworkInterfaces (Auth+Admin) -> ALLOWED\n");
-                    
-                    Interfacedata ifaces[3];
-                    int count = scan_interfaces(ifaces, 3);
-                    char *xml_buf = (char *)malloc(8192);
-                    strcpy(xml_buf, NET_IF_HEADER);
-
-                    char soap_response[16384];
-                    char eachtime[2048];
-                    char token_name[64];
-                    for (int i = 0; i < count; i++) {
-                        snprintf(token_name, sizeof(token_name), "%s_token", ifaces[i].name);
-                        snprintf(eachtime, sizeof(eachtime), NET_IF_ITEM,
-                                 token_name,          // token (e.g. eth0_token)
-                                 ifaces[i].name,      // Info Name
-                                 ifaces[i].mac,       // Info Mac
-                                 ifaces[i].mtu,       // Info MTU
-                                 ifaces[i].ip,        // IPv4 Address
-                                 ifaces[i].prefix_len,// IPv4 Prefix
-                                 cfg1.fromdhcp        // DHCP from config
-                        );
-                        strcat(xml_buf, eachtime);
-                    }
-                    strcat(xml_buf, NET_IF_FOOTER);
-
-                    snprintf(soap_response, sizeof(soap_response),
-                             "HTTP/1.1 200 OK\r\n"
-                             "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                             "Content-Length: %zu\r\n"
-                             "Connection: close\r\n\r\n%s",
-                             strlen(xml_buf), xml_buf);
-
-                    send(cs, soap_response, strlen(soap_response), 0);
-                    free(xml_buf);
-                } else {
-                    // Authenticated but NOT Admin
-                    printf("[TCP] Req: GetNetworkInterfaces (Not Admin) -> FORBIDDEN\n");
-                    send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
-                }
-            } else {
-                // No Authentication -> Challenge
-                printf("[TCP] Req: GetNetworkInterfaces (No Auth) -> CHALLENGE\n");
-                send_digest_challenge(cs);
-            }
-        }
-        else if(strstr(buf, "SetNetworkInterfaces")){
-            if (no_auth_mode || has_any_authentication(buf)) {
-                char user[256] = {0};
-                extract_header_val(buf, "username", user, sizeof(user));
-
-                if (no_auth_mode || is_admin(buf, user)) {
-                    printf("[TCP] Req: SetNetworkInterfaces (Auth+Admin) -> ALLOWED\n");
-
-                    // Extract interface token from request to identify which interface
-                    char req_token[64] = {0};
-                    extract_tag_value(buf, "InterfaceToken", req_token, sizeof(req_token));
-                    if (req_token[0]) {
-                        printf("[TCP] SetNetworkInterfaces for token: %s\n", req_token);
-                    }
-
-                    // Resolve actual interface name from token (e.g. "eth0_token" -> "eth0")
-                    char iface_name[32] = "eth0"; // Default fallback
-                    if (req_token[0]) {
-                        char *suffix = strstr(req_token, "_token");
-                        if (suffix) {
-                            size_t name_len = suffix - req_token;
-                            if (name_len < sizeof(iface_name)) {
-                                strncpy(iface_name, req_token, name_len);
-                                iface_name[name_len] = '\0';
+                else if (strstr(buf, "GetNetworkInterfaces")) {
+                    if (no_auth_mode || has_any_authentication(buf)) {
+                        char user[256] = {0};
+                        extract_header_val(buf, "username", user, sizeof(user));
+        
+                        if (no_auth_mode || is_admin(buf, user)) {
+                            printf("[TCP] Req: GetNetworkInterfaces (Auth+Admin) -> ALLOWED\n");
+                            
+                            Interfacedata ifaces[3];
+                            int count = scan_interfaces(ifaces, 3);
+                            
+                            // [FIX] Declare the response buffer here
+                            char soap_response[16384]; 
+        
+                            char *xml_buf = (char *)malloc(8192);
+                            // Standard ONVIF Header
+                            strcpy(xml_buf, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                                            "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+                                            "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
+                                            "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+                                            "<s:Body><tds:GetNetworkInterfacesResponse>");
+        
+                            char eachtime[4096];
+                            char token_name[64];
+                            char is_dhcp_str[10];
+        
+                            for (int i = 0; i < count; i++) {
+                                snprintf(token_name, sizeof(token_name), "%s_token", ifaces[i].name);
+        
+                                // --- DYNAMIC DHCP DETECTION ---
+                                // We check if 'dhclient' is running for this specific interface.
+                                char check_cmd[256];
+                                snprintf(check_cmd, sizeof(check_cmd), 
+                                         "ps -eo args | grep -v grep | grep 'dhclient' | grep -q '%s'", 
+                                         ifaces[i].name);
+                                
+                                // system() returns 0 if grep finds a match (Process Running = DHCP ON)
+                                if (system(check_cmd) == 0) {
+                                    strcpy(is_dhcp_str, "true");
+                                } else {
+                                    strcpy(is_dhcp_str, "false");
+                                }
+                                // ------------------------------
+        
+                                // Build XML with Link Capabilities
+                                snprintf(eachtime, sizeof(eachtime), 
+                                    "<tds:NetworkInterfaces token=\"%s\">"
+                                        "<tds:Enabled>true</tds:Enabled>"
+                                        "<tds:Link>"
+                                            "<tt:AdminSettings>"
+                                                "<tt:AutoNegotiation>true</tt:AutoNegotiation>"
+                                                "<tt:Speed>100</tt:Speed>"
+                                                "<tt:Duplex>Full</tt:Duplex>"
+                                            "</tt:AdminSettings>"
+                                            "<tt:OperSettings>"
+                                                "<tt:AutoNegotiation>true</tt:AutoNegotiation>"
+                                                "<tt:Speed>1000</tt:Speed>"
+                                                "<tt:Duplex>Full</tt:Duplex>"
+                                            "</tt:OperSettings>"
+                                            "<tt:InterfaceType>Ethernet</tt:InterfaceType>"
+                                        "</tds:Link>"
+                                        "<tds:Info>"
+                                            "<tt:Name>%s</tt:Name>"
+                                            "<tt:HwAddress>%s</tt:HwAddress>"
+                                            "<tt:MTU>%d</tt:MTU>"
+                                        "</tds:Info>"
+                                        "<tds:IPv4>"
+                                            "<tt:Enabled>true</tt:Enabled>"
+                                            "<tt:Config>"
+                                                "<tt:Manual>"
+                                                    "<tt:Address>%s</tt:Address>"
+                                                    "<tt:PrefixLength>%d</tt:PrefixLength>"
+                                                "</tt:Manual>"
+                                                "<tt:DHCP>%s</tt:DHCP>"
+                                            "</tt:Config>"
+                                        "</tds:IPv4>"
+                                    "</tds:NetworkInterfaces>",
+                                    token_name,          // Token
+                                    ifaces[i].name,      // Name
+                                    ifaces[i].mac,       // MAC
+                                    ifaces[i].mtu,       // MTU
+                                    ifaces[i].ip,        // IP
+                                    ifaces[i].prefix_len,// Prefix
+                                    is_dhcp_str          // DYNAMIC STATUS
+                                );
+                                strcat(xml_buf, eachtime);
                             }
+                            strcat(xml_buf, "</tds:GetNetworkInterfacesResponse></s:Body></s:Envelope>");
+        
+                            // Now soap_response is declared and ready to use
+                            snprintf(soap_response, sizeof(soap_response),
+                                     "HTTP/1.1 200 OK\r\n"
+                                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                     "Content-Length: %zu\r\n"
+                                     "Connection: close\r\n\r\n%s",
+                                     strlen(xml_buf), xml_buf);
+        
+                            send(cs, soap_response, strlen(soap_response), 0);
+                            free(xml_buf);
                         } else {
-                            strncpy(iface_name, req_token, sizeof(iface_name) - 1);
+                            printf("[TCP] Req: GetNetworkInterfaces (Not Admin) -> FORBIDDEN\n");
+                            send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized");
                         }
-                    }
-
-                    // Extract IPv4 settings if present
-                    char new_ip[64] = {0};
-                    char new_prefix[16] = {0};
-                    char new_dhcp[8] = {0};
-                    extract_tag_value(buf, "tt:Address", new_ip, sizeof(new_ip));
-                    extract_tag_value(buf, "tt:PrefixLength", new_prefix, sizeof(new_prefix));
-                    extract_tag_value(buf, "tt:DHCP", new_dhcp, sizeof(new_dhcp));
-
-                    // Update config.xml with new network settings
-                    if (new_ip[0]) {
-                        setdnsinxml(new_ip, "<addr>", "</addr>");
-                    }
-                    if (new_prefix[0]) {
-                        setdnsinxml(new_prefix, "<subnet>", "</subnet>");
-                    }
-                    if (new_dhcp[0]) {
-                        setdnsinxml(new_dhcp, "<FromDHCP>", "</FromDHCP>");
-                    }
-
-                    // Apply IP to OS immediately so reconciliation sees the new IP on restart
-                    if (new_ip[0] && new_prefix[0] && is_valid_ipv4(new_ip) && is_valid_prefix(new_prefix)
-                        && is_valid_iface_name(iface_name)) {
-                        char cmd[512];
-                        snprintf(cmd, sizeof(cmd),
-                                 "ip addr flush dev %s && ip addr add %s/%s dev %s && ip link set %s up",
-                                 iface_name, new_ip, new_prefix, iface_name, iface_name);
-                        printf("[TCP] Executing: %s\n", cmd);
-                        int ret = system(cmd);
-                        if (ret != 0) {
-                            fprintf(stderr, "[TCP] Failed to apply IP to OS (exit %d, requires root)\n", ret);
-                        }
-                    } else if (new_ip[0] || new_prefix[0]) {
-                        fprintf(stderr, "[TCP] Invalid IP/prefix/interface format, skipping OS apply\n");
-                    }
-
-                    // Send SOAP success response before shutdown
-                    const char *soap_body =
-                        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                        "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" "
-                        "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
-                            "<soap:Body>"
-                                "<tds:SetNetworkInterfacesResponse>"
-                                    "<tds:RebootNeeded>true</tds:RebootNeeded>"
-                                "</tds:SetNetworkInterfacesResponse>"
-                            "</soap:Body>"
-                        "</soap:Envelope>";
-                    send_soap_ok(cs, soap_body);
-
-                    // Send WS-Discovery Bye multicast message
-                    int bye_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-                    if (bye_sock >= 0) {
-                        struct sockaddr_in mcast_addr = {0};
-                        mcast_addr.sin_family = AF_INET;
-                        mcast_addr.sin_port = htons(DISCOVERY_PORT);
-                        inet_pton(AF_INET, MULTICAST_ADDR, &mcast_addr.sin_addr);
-
-                        char bye_msg_id[46];
-                        generate_messageid(bye_msg_id, sizeof(bye_msg_id));
-
-                        char bye_buf[2048];
-                        snprintf(bye_buf, sizeof(bye_buf), WS_DISCOVERY_BYE_TEMPLATE,
-                                 bye_msg_id, device_uuid);
-
-                        sendto(bye_sock, bye_buf, strlen(bye_buf), 0,
-                               (struct sockaddr *)&mcast_addr, sizeof(mcast_addr));
-                        printf("[TCP] Sent WS-Discovery Bye message\n");
-                        close(bye_sock);
                     } else {
-                        perror("[TCP] Failed to create Bye socket");
+                        printf("[TCP] Req: GetNetworkInterfaces (No Auth) -> CHALLENGE\n");
+                        send_digest_challenge(cs);
                     }
-
-                    close(cs);
-                    close(sock);
-                    printf("[TCP] Network interface changed, shutting down for restart\n");
-                    sleep(SHUTDOWN_FLUSH_DELAY_SEC);
-                    exit(0);
-                } else {
-                    printf("[TCP] Req: SetNetworkInterfaces (Not Admin) -> FORBIDDEN\n");
-                    send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
                 }
-            } else {
-                printf("[TCP] Req: SetNetworkInterfaces (No Auth) -> CHALLENGE\n");
-                send_digest_challenge(cs);
-            }
-        }
+                // CASE: SetNetworkInterfaces
+                        else if (strstr(buf, "SetNetworkInterfaces")) {
+                            if (no_auth_mode || has_any_authentication(buf)) {
+                                char user[256] = {0};
+                                extract_header_val(buf, "username", user, sizeof(user));
+                
+                                if (no_auth_mode || is_admin(buf, user)) {
+                                    printf("[TCP] Req: SetNetworkInterfaces (Auth+Admin) -> ALLOWED\n");
+                
+                                    // 1. EXTRACT TOKEN
+                                    char req_token[64] = {0};
+                                    extract_tag_value(buf, "InterfaceToken", req_token, sizeof(req_token));
+                
+                                    // 2. RESOLVE INTERFACE (Generic & Risky)
+                                    char iface_name[32] = {0};
+                                    
+                                    if (req_token[0] != '\0') {
+                                        // Logic: "enp3s0_token" -> "enp3s0", "eth0" -> "eth0"
+                                        char *suffix = strstr(req_token, "_token");
+                                        if (suffix) {
+                                            size_t len = suffix - req_token;
+                                            if (len < sizeof(iface_name)) {
+                                                strncpy(iface_name, req_token, len);
+                                                iface_name[len] = '\0';
+                                            }
+                                        } else {
+                                            strncpy(iface_name, req_token, sizeof(iface_name) - 1);
+                                        }
+                                    } else {
+                                        // Fallback if client sends empty token (Standard says default)
+                                        strcpy(iface_name, "eth0"); 
+                                    }
+                
+                                    // Basic sanity check to prevent shell injection (keep this!)
+                                    if (!is_valid_iface_name(iface_name)) {
+                                        send_soap_fault(cs, FAULT_INVALID_ARG, "Invalid Interface Token");
+                                        close(cs);
+                                        continue;
+                                    }
+                
+                                    printf("[TCP] Targeting Interface: %s\n", iface_name);
+                
+                                    // 3. EXTRACT SETTINGS
+                                    char new_ip[64] = {0}, new_prefix[16] = {0}, new_dhcp[8] = {0};
+                                    extract_tag_value(buf, "tt:Address", new_ip, sizeof(new_ip));
+                                    extract_tag_value(buf, "tt:PrefixLength", new_prefix, sizeof(new_prefix));
+                                    extract_tag_value(buf, "tt:DHCP", new_dhcp, sizeof(new_dhcp));
+                
+                                    int use_dhcp = (strncmp(new_dhcp, "true", 4) == 0);
+                
+                                    // 4. PREPARE COMMAND (Do not run yet)
+                                    char cmd[512] = {0};
+                                    if (use_dhcp) {
+                                        // Release & Renew
+                                        snprintf(cmd, sizeof(cmd), "dhclient -r %s && dhclient %s", iface_name, iface_name);
+                                    } 
+                                    else if (new_ip[0] && new_prefix[0] && is_valid_ipv4(new_ip)) {
+                                        // Flush & Set Static
+                                        snprintf(cmd, sizeof(cmd),
+                                                     "ip addr flush dev %s && ip addr add %s/%s broadcast + dev %s && ip link set %s up",
+                                                     iface_name, new_ip, new_prefix, iface_name, iface_name);
+                                    }
+                
+                                    // 5. UPDATE XML (Best effort persistence)
+                                    if (use_dhcp) setdnsinxml("true", "<FromDHCP>", "</FromDHCP>");
+                                    else {
+                                        setdnsinxml("false", "<FromDHCP>", "</FromDHCP>");
+                                        if (new_ip[0]) setdnsinxml(new_ip, "<addr>", "</addr>");
+                                        if (new_prefix[0]) setdnsinxml(new_prefix, "<subnet>", "</subnet>");
+                                    }
+                
+                                    // 6. SEND RESPONSE FIRST (Avoid Timeout)
+                                    const char *soap_body =
+                                        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                                        "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                                            "<soap:Body>"
+                                                "<tds:SetNetworkInterfacesResponse>"
+                                                    "<tds:RebootNeeded>true</tds:RebootNeeded>"
+                                                "</tds:SetNetworkInterfacesResponse>"
+                                            "</soap:Body>"
+                                        "</soap:Envelope>";
+                                    send_soap_ok(cs, soap_body);
+                
+                                    // 7. SEND DISCOVERY BYE
+                                    int bye_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+                                    if (bye_sock >= 0) {
+                                        struct sockaddr_in mcast_addr = {0};
+                                        mcast_addr.sin_family = AF_INET;
+                                        mcast_addr.sin_port = htons(DISCOVERY_PORT);
+                                        inet_pton(AF_INET, MULTICAST_ADDR, &mcast_addr.sin_addr);
+                                        char bye_msg_id[46];
+                                        generate_messageid(bye_msg_id, sizeof(bye_msg_id));
+                                        char bye_buf[2048];
+                                        snprintf(bye_buf, sizeof(bye_buf), WS_DISCOVERY_BYE_TEMPLATE, bye_msg_id, device_uuid);
+                                        sendto(bye_sock, bye_buf, strlen(bye_buf), 0, (struct sockaddr *)&mcast_addr, sizeof(mcast_addr));
+                                        close(bye_sock);
+                                    }
+                
+                                    // 8. CLOSE CONNECTION
+                                    close(cs);
+                
+                                    // 9. EXECUTE & DIE
+                                    if (cmd[0]) {
+                                        printf("[TCP] Executing: %s\n", cmd);
+                                        int ret = system(cmd);
+                                        if (ret != 0) fprintf(stderr, "[TCP] Command failed (exit %d)\n", ret);
+                                    }
+                
+                                    printf("[TCP] Configuration applied. Restarting.\n");
+                                    sleep(SHUTDOWN_FLUSH_DELAY_SEC);
+                                    exit(0);
+                
+                                } else {
+                                    printf("[TCP] Req: SetNetworkInterfaces (Not Admin) -> FORBIDDEN\n");
+                                    send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized");
+                                }
+                            } else {
+                                printf("[TCP] Req: SetNetworkInterfaces (No Auth) -> CHALLENGE\n");
+                                send_digest_challenge(cs);
+                            }
+                        }
 
         // CASE: GetServices
         else if (strstr(buf, "GetServices")) {

@@ -120,7 +120,7 @@ const char *PROBE_MATCH_TEMPLATE =
     "onvif://www.onvif.org/location/%s "
     "onvif://www.onvif.org/profile/%s "
     "onvif://www.onvif.org/type/%s</d:Scopes>"
-    "<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
+    "<d:XAddrs>%s</d:XAddrs>"//"<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
     "<d:MetadataVersion>1</d:MetadataVersion>"
     "</d:ProbeMatch>"
     "</d:ProbeMatches>"

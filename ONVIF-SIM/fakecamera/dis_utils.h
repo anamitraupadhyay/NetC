@@ -169,6 +169,42 @@ void getlocalip(char *buf, size_t size){
     close(sockfd);
 }
 
+void generate_xaddrs_list(char *buffer, size_t size, int port) {
+    struct ifaddrs *ifaddr, *ifa;
+    buffer[0] = '\0'; // Start empty
+
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        return;
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) continue;
+
+        // Check for IPv4 (AF_INET) and skip loopback (lo)
+        // copied from previous saved implementation
+        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0) {
+            
+            // Convert IP to string
+            char ip[INET_ADDRSTRLEN];
+            struct sockaddr_in *pAddr = (struct sockaddr_in *)ifa->ifa_addr;
+            inet_ntop(AF_INET, &pAddr->sin_addr, ip, INET_ADDRSTRLEN);
+
+            // Append URL to buffer
+            char url[256];
+            snprintf(url, sizeof(url), "http://%s:%d/onvif/device_service", ip, port);
+
+            // Add space if this is not the first entry
+            if (strlen(buffer) > 0) {
+                strncat(buffer, " ", size - strlen(buffer) - 1);
+            }
+            strncat(buffer, url, size - strlen(buffer) - 1);
+        }
+    }
+
+    freeifaddrs(ifaddr);
+}
+
 
 int build_response(const char *message_id ,const char *relates_to_id, 
                    const char *message_id1,
