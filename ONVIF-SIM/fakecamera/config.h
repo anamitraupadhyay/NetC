@@ -24,6 +24,7 @@ struct datafromxml{
     char profile[64];
     char hardware[64];
     char location[64];
+    int auth_enabled;
     char hostname[64];
     char fromdhcp[8];
     char gateway[64];

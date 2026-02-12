@@ -91,6 +91,9 @@ static inline int load_config(const char *filename, config *cfg)
         else if(get_the_tag(line, "hostname", cfg->hostname, sizeof(cfg->hostname)));
             
         else if(get_the_tag(line, "FromDHCP", cfg->fromdhcp, sizeof(cfg->fromdhcp))){}
+
+        else if (get_the_tag(line, "auth", buf, sizeof(buf)))
+            cfg->auth_enabled = atoi(buf);
         
             
         else if(get_the_tag(line, "addr", cfg->ip_addr, sizeof(cfg->ip_addr))); 

@@ -230,6 +230,15 @@ void *tcpserver(void *arg) {
         // Reload users from CSV on every request for guaranteed fresh state
         loadUsers();
 
+        // Reload config to detect auth toggle changes (flicking <auth> to 0 or 1)
+        config cfg_live = {0};
+        cfg_live.auth_enabled = 1; // Default: auth required
+        load_config("config.xml", &cfg_live);
+        int no_auth_mode = (cfg_live.auth_enabled == 0);
+        if (no_auth_mode) {
+            printf("[TCP] Auth disabled via config.xml (<auth>0</auth>)\n");
+        }
+
         // messageID for RelatesTo
         char request_message_id[256] = {0};
         getmessageid1(buf, request_message_id, sizeof(request_message_id));
@@ -259,11 +268,11 @@ void *tcpserver(void *arg) {
         }
         else if(strstr(buf, "SetHostname")){
             // admin priviledges is mandatory
-            if(has_any_authentication(buf)){
+            if(no_auth_mode || has_any_authentication(buf)){
                 char user[256] = {0};
                 extract_header_val(buf, "username", user, sizeof(user));
                 
-                if(is_admin(buf, user)){
+                if(no_auth_mode || is_admin(buf, user)){
                     char hostnamearr[64];
                     extract_tag_value(buf, "hostname", hostnamearr, sizeof(hostnamearr));
                     sethostnameinxml(hostnamearr);
@@ -321,7 +330,7 @@ void *tcpserver(void *arg) {
         // CASE 2: GetDeviceInformation (Protected)
         else if (strstr(buf, "GetDeviceInformation")) {
 
-            if (has_any_authentication(buf)) {
+            if (no_auth_mode || has_any_authentication(buf)) {
                 // --- SUB-CASE 2A: HAS AUTH -> PASS (Blind Trust) ---
                 printf("[TCP] Req: GetDeviceInformation (Auth Present) -> ALLOWED\n");
 
@@ -363,13 +372,13 @@ void *tcpserver(void *arg) {
         }
         // CASE 3: GetUser (3 way handshake as ususal)
         else if(strstr(buf, "GetUsers")){
-          if(has_any_authentication(buf)) {
+          if(no_auth_mode || has_any_authentication(buf)) {
               // check if its admin or not from CredWithLevel.csv
               //static bool is_admin_user = false;
               char user[256] = {0};
               extract_header_val(buf, "username", user, sizeof(user));
 
-              if(is_admin(buf, user /*,is_admin_user*/)){ // how will i get this user
+              if(no_auth_mode || is_admin(buf, user /*,is_admin_user*/)){ // how will i get this user
 
             // if(is_admin(buf)){ ok just chnage the has any auth and later do enum
                 // --- SUB-CASE 3C: HAS AUTH + IS ADMIN -> PASS ---
@@ -402,7 +411,7 @@ void *tcpserver(void *arg) {
         }
         // CASE 4 : SetUsers
         else if(strstr(buf,"<tds:SetUser>")){
-            if(has_any_authentication(buf)){
+            if(no_auth_mode || has_any_authentication(buf)){
                 printf("[TCP] Req: SetUsers (Auth Present) -> ALLOWED\n");
                 char soap_response[8192];  // Large buffer for multiple users
                 //create users specific here
@@ -418,7 +427,7 @@ void *tcpserver(void *arg) {
                 }
   
                 printf("[DEBUG] Extracted User: '%s'\n", user); // Debug print
-                if(user[0] != '\0' && is_admin(buf, user)){
+                if(no_auth_mode || (user[0] != '\0' && is_admin(buf, user))){
                     setusers(buf, cs);// handles the 
                     // parsesetusers also the edgecases too
                     // now addition of that case that if any user 
@@ -438,7 +447,7 @@ void *tcpserver(void *arg) {
     }
         // CASE 5 : DeleteUsers
         else if (strstr(buf, "DeleteUsers")) {
-                    if (has_any_authentication(buf)) {
+                    if (no_auth_mode || has_any_authentication(buf)) {
                         printf("[TCP] Req: DeleteUsers (Auth Present) -> ALLOWED\n");
                         
                         char user[256] = {0};
@@ -448,7 +457,7 @@ void *tcpserver(void *arg) {
                             extract_header_val(buf, "Username", user, sizeof(user));
                         }
         
-                        if (user[0] != '\0' && is_admin(buf, user)) {
+                        if (no_auth_mode || (user[0] != '\0' && is_admin(buf, user))) {
                             parse_delete_users_xml(buf);
         
                             for (int i = 0; i < numofuserssentdelete; i++) {
@@ -482,7 +491,7 @@ void *tcpserver(void *arg) {
                 }
         // CASE 6 : CreateUsers
         else if (strstr(buf, "CreateUsers")) {
-          if(has_any_authentication(buf)){
+          if(no_auth_mode || has_any_authentication(buf)){
               printf("[TCP] Req: CreateUsers (Auth Present) -> ALLOWED\n");
               char soap_response[8192];  // Large buffer for multiple users
               //create users specific here
@@ -498,7 +507,7 @@ void *tcpserver(void *arg) {
               }
 
               printf("[DEBUG] Extracted User: '%s'\n", user); // Debug print
-              if(user[0] != '\0' && is_admin(buf, user)){
+              if(no_auth_mode || (user[0] != '\0' && is_admin(buf, user))){
                 appendusers(buf,cs);
               }
               else {
@@ -517,10 +526,10 @@ void *tcpserver(void *arg) {
         else if(strstr(buf, "SetDNS")){
             // its kinda ready but study of acttual pipeline
             // effect is yet to be studied
-            if(has_any_authentication(buf)){
+            if(no_auth_mode || has_any_authentication(buf)){
                 char user[256];
                 extract_header_val(buf, "username", user, sizeof(user));
-                if(is_admin(buf, user)){
+                if(no_auth_mode || is_admin(buf, user)){
                     //actual operations with send success
                     char thattobeset[256];
                     extract_tag_value(buf, "FromDHCP", thattobeset, sizeof(thattobeset)); // mandatory
@@ -607,11 +616,11 @@ void *tcpserver(void *arg) {
         }
         // CASE: SetNetworkDefaultGateway
         else if(strstr(buf, "SetNetworkDefaultGateway")){
-            if (has_any_authentication(buf)) {
+            if (no_auth_mode || has_any_authentication(buf)) {
                 char user[256] = {0};
                 extract_header_val(buf, "username", user, sizeof(user));
 
-                if (is_admin(buf, user)) {
+                if (no_auth_mode || is_admin(buf, user)) {
                     printf("[TCP] Req: SetNetworkDefaultGateway (Auth+Admin) -> ALLOWED\n");
                     char new_gw[64] = {0};
                     extract_tag_value(buf, "IPv4Address", new_gw, sizeof(new_gw));
@@ -654,12 +663,12 @@ void *tcpserver(void *arg) {
         
         // CASE: GetNetworkInterfaces
         else if (strstr(buf, "GetNetworkInterfaces")) {
-            if (has_any_authentication(buf)) {
+            if (no_auth_mode || has_any_authentication(buf)) {
                 char user[256] = {0};
                 extract_header_val(buf, "username", user, sizeof(user));
 
                 // Check for Admin privileges
-                if (is_admin(buf, user)) {
+                if (no_auth_mode || is_admin(buf, user)) {
                     printf("[TCP] Req: GetNetworkInterfaces (Auth+Admin) -> ALLOWED\n");
                     
                     Interfacedata ifaces[3];
@@ -706,11 +715,11 @@ void *tcpserver(void *arg) {
             }
         }
         else if(strstr(buf, "SetNetworkInterfaces")){
-            if (has_any_authentication(buf)) {
+            if (no_auth_mode || has_any_authentication(buf)) {
                 char user[256] = {0};
                 extract_header_val(buf, "username", user, sizeof(user));
 
-                if (is_admin(buf, user)) {
+                if (no_auth_mode || is_admin(buf, user)) {
                     printf("[TCP] Req: SetNetworkInterfaces (Auth+Admin) -> ALLOWED\n");
 
                     // Extract interface token from request to identify which interface
