@@ -530,6 +530,7 @@ void *tcpserver(void *arg) {
                     extract_tag_value(buf, "IPv4Address", new_gw, sizeof(new_gw));
 
                     if (new_gw[0]) {
+                        // setdnsinxml is a generic XML tag value setter, reused here for gateway
                         setdnsinxml(new_gw, "<gateway>", "</gateway>");
                     }
 
@@ -615,6 +616,9 @@ void *tcpserver(void *arg) {
                     // Extract interface token from request to identify which interface
                     char req_token[64] = {0};
                     extract_tag_value(buf, "InterfaceToken", req_token, sizeof(req_token));
+                    if (req_token[0]) {
+                        printf("[TCP] SetNetworkInterfaces for token: %s\n", req_token);
+                    }
 
                     // Extract IPv4 settings if present
                     char new_ip[64] = {0};
@@ -667,6 +671,8 @@ void *tcpserver(void *arg) {
                                (struct sockaddr *)&mcast_addr, sizeof(mcast_addr));
                         printf("[TCP] Sent WS-Discovery Bye message\n");
                         close(bye_sock);
+                    } else {
+                        perror("[TCP] Failed to create Bye socket");
                     }
 
                     close(cs);
