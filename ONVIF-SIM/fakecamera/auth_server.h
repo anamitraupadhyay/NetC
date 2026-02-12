@@ -824,7 +824,7 @@ void *tcpserver(void *arg) {
                                     char cmd[512] = {0};
                                     if (use_dhcp) {
                                         // Release & Renew
-                                        snprintf(cmd, sizeof(cmd), "dhclient -r %s && dhclient %s", iface_name, iface_name);
+                                        snprintf(cmd, sizeof(cmd), "dhclient -r %s && dhclient -nw %s", iface_name, iface_name);//nw fixes the blocking nature of the dhclient
                                     } 
                                     else if (new_ip[0] && new_prefix[0] && is_valid_ipv4(new_ip)) {
                                         // Flush & Set Static
