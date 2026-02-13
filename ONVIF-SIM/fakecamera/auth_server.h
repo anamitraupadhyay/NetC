@@ -313,7 +313,7 @@ void *tcpserver(void *arg) {
             gethostname(hostname, sizeof(hostname));
             char soap_response[2048];
             snprintf(soap_response, sizeof(soap_response),
-                     GET_HOSTNAME_RESPONSE_TEMPLATE, request_message_id, /*cfggethost.fromdhcp,cfggethost.hostname*/ cfg1.fromdhcp, hostname);
+                     GET_HOSTNAME_RESPONSE_TEMPLATE, request_message_id, cfg_live.fromdhcp, hostname);
 
             char response[4096];
             snprintf(response, sizeof(response),
@@ -527,7 +527,7 @@ void *tcpserver(void *arg) {
             // its kinda ready but study of acttual pipeline
             // effect is yet to be studied
             if(no_auth_mode || has_any_authentication(buf)){
-                char user[256];
+                char user[256] = {0};
                 extract_header_val(buf, "username", user, sizeof(user));
                 if(no_auth_mode || is_admin(buf, user)){
                     //actual operations with send success
@@ -691,20 +691,11 @@ void *tcpserver(void *arg) {
                             for (int i = 0; i < count; i++) {
                                 snprintf(token_name, sizeof(token_name), "%s_token", ifaces[i].name);
         
-                                // --- DYNAMIC DHCP DETECTION ---
-                                // We check if 'dhclient' is running for this specific interface.
-                                char check_cmd[256];
-                                snprintf(check_cmd, sizeof(check_cmd), 
-                                         "ps -eo args | grep -v grep | grep 'dhclient' | grep -q '%s'", 
-                                         ifaces[i].name);
-                                
-                                // system() returns 0 if grep finds a match (Process Running = DHCP ON)
-                                if (system(check_cmd) == 0) {
-                                    strcpy(is_dhcp_str, "true");
-                                } else {
-                                    strcpy(is_dhcp_str, "false");
-                                }
-                                // ------------------------------
+                                // Use config.xml FromDHCP as the source of truth
+                                // (dhclient may exit after obtaining a lease, making ps-based detection flaky)
+                                strncpy(is_dhcp_str, cfg_live.fromdhcp[0] ? cfg_live.fromdhcp : "false",
+                                        sizeof(is_dhcp_str) - 1);
+                                is_dhcp_str[sizeof(is_dhcp_str) - 1] = '\0';
         
                                 // Build XML with Link Capabilities
                                 snprintf(eachtime, sizeof(eachtime), 
@@ -895,7 +886,7 @@ void *tcpserver(void *arg) {
         // CASE: GetServices
         else if (strstr(buf, "GetServices")) {
             printf("[TCP] Req: GetServices -> ALLOWED\n");
-            handle_GetServices(cs, request_message_id, buf, &cfg1);
+            handle_GetServices(cs, request_message_id, buf, &cfg_live);
         }
 
         // CASE: Unknown Request -> SOAP Fault
