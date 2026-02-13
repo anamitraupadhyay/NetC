@@ -24,7 +24,8 @@ static void reconcile_actual_vs_desired(void) {
             printf("[System] IP Mismatch (Config: %s vs OS: %s). Syncing config to actual.\n",
                    cfg.ip_addr, actual_ip);
             // setdnsinxml is a generic XML tag value setter (not DNS-specific)
-            setdnsinxml(actual_ip, "<addr>", "</addr>");
+            //setdnsinxml(actual_ip, "<addr>", "</addr>");
+            strcpy(actual_ip, cfg.ip_addr);
         } else {
             printf("[System] IP consistent: %s\n", actual_ip);
         }
