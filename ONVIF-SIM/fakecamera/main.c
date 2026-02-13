@@ -6,23 +6,48 @@
 #include "discovery_server.h"
 #include "auth_server.h"
 
+// Check if a named interface exists on this machine by scanning OS interfaces.
+// Returns 1 if found, 0 if not.
+static int iface_exists(const char *name) {
+    Interfacedata scan[8];
+    int n = scan_interfaces(scan, 8);
+    for (int i = 0; i < n; i++) {
+        if (strcmp(scan[i].name, name) == 0) return 1;
+    }
+    return 0;
+}
+
 // Apply config.xml network settings to the OS at boot.
 // config.xml is the "Admin State" (source of truth). The OS must match it.
-// This prevents split-brain where the OS reverts to defaults on reboot
-// while config.xml retains user-configured values.
+// Safety: if config.xml references an interface or IP that doesn't belong to
+// this machine (e.g., copied from another device), the function falls back to
+// auto-detected OS values and updates config.xml to match reality.
 static void apply_boot_config(config *cfg) {
     printf("[Boot] Enforcing Network Configuration from XML...\n");
 
-    // Resolve interface name from config (fall back to first physical interface)
+    // --- Resolve & validate interface name ---
     char iface[32] = {0};
+    int iface_from_config = 0;
+
     if (cfg->interface_token[0] && is_valid_iface_name(cfg->interface_token)) {
-        strncpy(iface, cfg->interface_token, sizeof(iface) - 1);
-    } else {
-        // Auto-detect: use the first non-loopback, non-virtual interface
+        if (iface_exists(cfg->interface_token)) {
+            strncpy(iface, cfg->interface_token, sizeof(iface) - 1);
+            iface_from_config = 1;
+        } else {
+            fprintf(stderr, "[Boot] WARNING: Config interface '%s' not found on this machine.\n",
+                    cfg->interface_token);
+        }
+    }
+
+    // Fallback: auto-detect the first physical interface
+    if (!iface_from_config) {
         Interfacedata scan[3];
         int n = scan_interfaces(scan, 3);
         if (n > 0) {
             strncpy(iface, scan[0].name, sizeof(iface) - 1);
+            printf("[Boot] FALLBACK: Using auto-detected interface '%s'.\n", iface);
+            // Update config.xml so it matches this machine
+            setdnsinxml(iface, "<interface_token>", "</interface_token>");
         }
     }
 
@@ -32,6 +57,10 @@ static void apply_boot_config(config *cfg) {
     }
 
     printf("[Boot] Target interface: %s\n", iface);
+
+    // Save current OS IP before any changes (for rollback)
+    char saved_ip[64] = {0};
+    getlocalip(saved_ip, sizeof(saved_ip));
 
     // --- DHCP vs Static ---
     if (cfg->fromdhcp[0] && strcmp(cfg->fromdhcp, "true") == 0) {
@@ -48,14 +77,11 @@ static void apply_boot_config(config *cfg) {
             char prefix_str[8];
             snprintf(prefix_str, sizeof(prefix_str), "%d", cfg->prefix_length > 0 ? cfg->prefix_length : 24);
 
-            char actual_ip[64] = {0};
-            getlocalip(actual_ip, sizeof(actual_ip));
-
-            if (actual_ip[0] && strcmp(actual_ip, cfg->ip_addr) == 0) {
+            if (saved_ip[0] && strcmp(saved_ip, cfg->ip_addr) == 0) {
                 printf("[Boot] IP already matches config: %s\n", cfg->ip_addr);
             } else {
                 printf("[Boot] IP Mismatch (Config: %s vs OS: %s). Applying config.\n",
-                       cfg->ip_addr, actual_ip[0] ? actual_ip : "(none)");
+                       cfg->ip_addr, saved_ip[0] ? saved_ip : "(none)");
                 char cmd[512];
                 snprintf(cmd, sizeof(cmd),
                          "ip addr flush dev %s 2>/dev/null && "
@@ -63,12 +89,48 @@ static void apply_boot_config(config *cfg) {
                          "ip link set %s up",
                          iface, cfg->ip_addr, prefix_str, iface, iface);
                 int ret = system(cmd);
+
                 if (ret != 0) {
-                    fprintf(stderr, "[Boot] Failed to apply IP (exit %d, requires root)\n", ret);
+                    // Command failed — revert to previous OS IP
+                    fprintf(stderr, "[Boot] Failed to apply IP (exit %d). Keeping OS IP.\n", ret);
+                    if (saved_ip[0] && is_valid_ipv4(saved_ip)) {
+                        setdnsinxml(saved_ip, "<addr>", "</addr>");
+                        printf("[Boot] FALLBACK: Updated config.xml addr to OS IP %s\n", saved_ip);
+                    }
+                } else if (cfg->gateway[0] && is_valid_ipv4(cfg->gateway)) {
+                    // IP applied — verify gateway is reachable (quick 1-packet ping, 2s timeout)
+                    char ping_cmd[256];
+                    snprintf(ping_cmd, sizeof(ping_cmd),
+                             "ping -c 1 -W 2 -I %s %s >/dev/null 2>&1", iface, cfg->gateway);
+                    int ping_ret = system(ping_cmd);
+                    if (ping_ret != 0) {
+                        fprintf(stderr,
+                                "[Boot] WARNING: Gateway %s unreachable after applying config IP %s.\n",
+                                cfg->gateway, cfg->ip_addr);
+                        // Rollback: restore previous OS IP and update config.xml
+                        if (saved_ip[0] && is_valid_ipv4(saved_ip)) {
+                            printf("[Boot] ROLLBACK: Reverting to previous OS IP %s.\n", saved_ip);
+                            char revert_cmd[512];
+                            snprintf(revert_cmd, sizeof(revert_cmd),
+                                     "ip addr flush dev %s 2>/dev/null && "
+                                     "ip addr add %s/%s broadcast + dev %s && "
+                                     "ip link set %s up",
+                                     iface, saved_ip, prefix_str, iface, iface);
+                            system(revert_cmd);
+                            setdnsinxml(saved_ip, "<addr>", "</addr>");
+                            printf("[Boot] FALLBACK: Config.xml updated to OS IP %s\n", saved_ip);
+                        }
+                    }
                 }
             }
         } else {
-            printf("[Boot] No valid IP in config.xml, skipping IP enforcement\n");
+            // No valid IP in config — adopt OS IP into config.xml
+            if (saved_ip[0] && is_valid_ipv4(saved_ip)) {
+                printf("[Boot] No valid IP in config.xml. Adopting OS IP %s.\n", saved_ip);
+                setdnsinxml(saved_ip, "<addr>", "</addr>");
+            } else {
+                printf("[Boot] No valid IP in config.xml or OS. Skipping IP enforcement.\n");
+            }
         }
     }
 
