@@ -169,6 +169,25 @@ void getlocalip(char *buf, size_t size){
     close(sockfd);
 }
 
+// Get the IP address of a specific network interface by name (e.g., "eth0", "enp3s0")
+// Returns 1 on success, 0 if the interface is not found or on error.
+int get_interface_ip(const char *iface_name, char *buf, size_t size) {
+    struct ifaddrs *ifaddr = NULL, *ifa;
+    if (getifaddrs(&ifaddr) == -1) return 0;
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) continue;
+        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, iface_name) == 0) {
+            struct sockaddr_in *paddr = (struct sockaddr_in *)ifa->ifa_addr;
+            inet_ntop(AF_INET, &paddr->sin_addr, buf, size);
+            freeifaddrs(ifaddr);
+            return 1;
+        }
+    }
+    freeifaddrs(ifaddr);
+    return 0;
+}
+
 void generate_xaddrs_list(char *buffer, size_t size, int port) {
     struct ifaddrs *ifaddr, *ifa;
     buffer[0] = '\0'; // Start empty

@@ -17,8 +17,15 @@ static void reconcile_actual_vs_desired(void) {
     }
 
     // --- IP Reconciliation ---
+    // Use the configured interface_token to check the right interface's IP,
+    // not the default-route IP. This prevents SetNetworkInterfaces changes
+    // from being overwritten when the default route goes through a different interface.
     char actual_ip[64] = {0};
-    getlocalip(actual_ip, sizeof(actual_ip));
+    if (cfg.interface_token[0] && get_interface_ip(cfg.interface_token, actual_ip, sizeof(actual_ip))) {
+        printf("[System] Checked interface %s -> %s\n", cfg.interface_token, actual_ip);
+    } else {
+        getlocalip(actual_ip, sizeof(actual_ip));
+    }
     if (actual_ip[0] && strcmp(actual_ip, "127.0.0.1") != 0) {
         if (cfg.ip_addr[0] && strcmp(actual_ip, cfg.ip_addr) != 0) {
             printf("[System] IP Mismatch (Config: %s vs OS: %s). Syncing config to actual.\n",
