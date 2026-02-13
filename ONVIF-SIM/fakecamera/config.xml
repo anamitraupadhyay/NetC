@@ -3,7 +3,6 @@
     <!-- Network Configuration -->
     <!-- <server_ip>172.16.4.9</server_ip> -->
     <server_port>7000</server_port>
-    <fromdhcp>true</fromdhcp>
     <searchdomain>HOSTNAME</searchdomain>
     <!-- <ipv4></ipv4>
     <ipv6></ipv6> -->
@@ -24,9 +23,9 @@
         <hardware_id>1.0</hardware_id>
         <type>IPv4</type>
         <profile>streaming</profile>
-        <hardware>VMS</hardware>
-        <location>India</location>
-        <auth>1</auth>
+        <hardware>VSaasEdgeBox</hardware>
+        <location>Any</location>
+        <auth>0</auth>
         <hostname>aupc</hostname>
         <FromDHCP>false</FromDHCP>
     </device>

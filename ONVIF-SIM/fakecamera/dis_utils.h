@@ -169,6 +169,61 @@ void getlocalip(char *buf, size_t size){
     close(sockfd);
 }
 
+// Get the IP address of a specific network interface by name (e.g., "eth0", "enp3s0")
+// Returns 1 on success, 0 if the interface is not found or on error.
+int get_interface_ip(const char *iface_name, char *buf, size_t size) {
+    struct ifaddrs *ifaddr = NULL, *ifa;
+    if (getifaddrs(&ifaddr) == -1) return 0;
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) continue;
+        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, iface_name) == 0) {
+            struct sockaddr_in *paddr = (struct sockaddr_in *)ifa->ifa_addr;
+            inet_ntop(AF_INET, &paddr->sin_addr, buf, size);
+            freeifaddrs(ifaddr);
+            return 1;
+        }
+    }
+    freeifaddrs(ifaddr);
+    return 0;
+}
+
+void generate_xaddrs_list(char *buffer, size_t size, int port) {
+    struct ifaddrs *ifaddr, *ifa;
+    buffer[0] = '\0'; // Start empty
+
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        return;
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) continue;
+
+        // Check for IPv4 (AF_INET) and skip loopback (lo)
+        // copied from previous saved implementation
+        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0) {
+            
+            // Convert IP to string
+            char ip[INET_ADDRSTRLEN];
+            struct sockaddr_in *pAddr = (struct sockaddr_in *)ifa->ifa_addr;
+            inet_ntop(AF_INET, &pAddr->sin_addr, ip, INET_ADDRSTRLEN);
+
+            // Append URL to buffer
+            char url[256];
+            snprintf(url, sizeof(url), "http://%s:%d/onvif/device_service", ip, port);
+
+            // Add space if this is not the first entry
+            if (strlen(buffer) > 0) {
+                strncat(buffer, " ", size - strlen(buffer) - 1);
+            }
+            strncat(buffer, url, size - strlen(buffer) - 1);
+        }
+    }
+
+    freeifaddrs(ifaddr);
+}
+
 
 int build_response(const char *message_id ,const char *relates_to_id, 
                    const char *message_id1,
