@@ -571,13 +571,13 @@ void *tcpserver(void *arg) {
                     optionalhandlingsdns(buf);
 
                     // 4. Apply to system based on DHCP flag
+                    // Always release existing dhclient lease first
+                    system("dhclient -r 2>/dev/null");
                     if (use_dhcp) {
-                        // Release any existing static resolv.conf, start dhclient
-                        // dhclient -nw prevents blocking; it runs in background
-                        system("dhclient -r 2>/dev/null; dhclient -nw 2>/dev/null");
+                        // Start dhclient; -nw prevents blocking
+                        system("dhclient -nw 2>/dev/null");
                     } else {
-                        // Static DNS: stop dhclient, then write resolv.conf
-                        system("dhclient -r 2>/dev/null");
+                        // Static DNS: write resolv.conf from config
                         applydnstoservice();
                     }
 
