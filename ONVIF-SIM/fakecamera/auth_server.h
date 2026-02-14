@@ -634,6 +634,7 @@ void *tcpserver(void *arg) {
                         while (end > ns && (*end == '\n' || *end == '\r' || *end == ' '))
                             *end-- = '\0';
                         strncpy(dnsaddr, ns, sizeof(dnsaddr) - 1);
+                        dnsaddr[sizeof(dnsaddr) - 1] = '\0';
                         break; // first nameserver
                     }
                 }
