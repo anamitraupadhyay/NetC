@@ -127,11 +127,15 @@ static int is_valid_iface_name(const char *s) {
 
 // Handler for GetServices - returns Device and Media service endpoints
 static void handle_GetServices(int cs, const char *msg_id, const char *req_buf, config *cfg) {
+    // Use live OS IP so XAddrs reflect actual reachable address
+    char live_ip[64] = {0};
+    getlocalip(live_ip, sizeof(live_ip));
+
     char device_url[256], media_url[256];
     snprintf(device_url, sizeof(device_url), "http://%s:%d/onvif/device_service",
-             cfg->ip_addr, cfg->server_port);
+             live_ip, cfg->server_port);
     snprintf(media_url, sizeof(media_url), "http://%s:%d/onvif/media_service",
-             cfg->ip_addr, cfg->server_port);
+             live_ip, cfg->server_port);
 
     // Check if client wants capabilities included
     int include_caps = 0;
@@ -594,15 +598,35 @@ void *tcpserver(void *arg) {
         // CASE: GetNetworkDefaultGateway
         else if(strstr(buf, "GetNetworkDefaultGateway")){
             printf("[TCP] Req: GetNetworkDefaultGateway\n");
-            config cfg_net = {0};
-            if(!load_config("config.xml", &cfg_net)){
-                // Fallback defaults if config fails
-                strncpy(cfg_net.gateway, "192.168.1.1", sizeof(cfg_net.gateway)-1);
+            // Read gateway from OS (not config.xml — network state lives in the OS)
+            char os_gateway[64] = {0};
+            FILE *route_fp = popen("ip route show default 2>/dev/null", "r");
+            if (route_fp) {
+                char route_line[256];
+                if (fgets(route_line, sizeof(route_line), route_fp)) {
+                    // Parse "default via 192.168.1.1 dev eth0 ..."
+                    char *via = strstr(route_line, "via ");
+                    if (via) {
+                        via += 4;
+                        char *end = strchr(via, ' ');
+                        if (end) {
+                            size_t len = end - via;
+                            if (len < sizeof(os_gateway)) {
+                                strncpy(os_gateway, via, len);
+                                os_gateway[len] = '\0';
+                            }
+                        }
+                    }
+                }
+                pclose(route_fp);
+            }
+            if (!os_gateway[0]) {
+                strncpy(os_gateway, "0.0.0.0", sizeof(os_gateway) - 1);
             }
         
             char soap_response[2048];
             snprintf(soap_response, sizeof(soap_response),
-                     GET_NET_GATEWAY_TEMPLATE, cfg_net.gateway);
+                     GET_NET_GATEWAY_TEMPLATE, os_gateway);
         
             char response[4096];
             snprintf(response, sizeof(response),
@@ -626,9 +650,7 @@ void *tcpserver(void *arg) {
                     extract_tag_value(buf, "IPv4Address", new_gw, sizeof(new_gw));
 
                     if (new_gw[0]) {
-                        // setdnsinxml is a generic XML tag value setter, reused here for gateway
-                        setdnsinxml(new_gw, "<gateway>", "</gateway>");
-                        // Apply route to OS immediately (validate input first)
+                        // Apply route to OS immediately (network state lives in the OS, not config.xml)
                         if (is_valid_ipv4(new_gw)) {
                             char cmd[256];
                             snprintf(cmd, sizeof(cmd),
@@ -824,12 +846,10 @@ void *tcpserver(void *arg) {
                                                      iface_name, new_ip, new_prefix, iface_name, iface_name);
                                     }
                 
-                                    // 5. UPDATE XML (Best effort persistence)
+                                    // 5. UPDATE XML (Only persist user preferences, not network state)
                                     if (use_dhcp) setdnsinxml("true", "<FromDHCP>", "</FromDHCP>");
                                     else {
                                         setdnsinxml("false", "<FromDHCP>", "</FromDHCP>");
-                                        if (new_ip[0]) setdnsinxml(new_ip, "<addr>", "</addr>");
-                                        if (new_prefix[0]) setdnsinxml(new_prefix, "<subnet>", "</subnet>");
                                     }
                 
                                     // 6. SEND RESPONSE FIRST (Avoid Timeout)

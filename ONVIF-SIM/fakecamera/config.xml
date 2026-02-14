@@ -1,21 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <config>
-    <!-- Network Configuration -->
-    <!-- <server_ip>172.16.4.9</server_ip> -->
+    <!-- Server Settings (Application Choices) -->
     <server_port>7000</server_port>
     <searchdomain>HOSTNAME</searchdomain>
-    <!-- <ipv4></ipv4>
-    <ipv6></ipv6> -->
-    <type>IPv4</type>
-    <addr>172.16.5.21</addr>
 
     <!-- Device Information -->
     <device>
-        <gateway>192.168.1.1</gateway>
-        <hwaddress>00:11:22:33:44:55</hwaddress>
-        <mtu>1500</mtu>
-        <subnet>24</subnet>
-        <interface_token>eth0</interface_token>
         <manufacturer>Videonetics</manufacturer>
         <model>Videonetics_Camera_Emulator</model>
         <firmware_version>10.0</firmware_version>
@@ -29,10 +19,4 @@
         <hostname>aupc</hostname>
         <FromDHCP>false</FromDHCP>
     </device>
-    
-    <!-- ONVIF Scopes -->
-    <!-- <scopes>
-        <scope>onvif://www.onvif.org/type/video_encoder</scope>
-        <scope>onvif://www.onvif.org/Profile/Streaming</scope>
-    </scopes> -->
 </config>

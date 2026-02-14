@@ -27,16 +27,6 @@ struct datafromxml{
     int auth_enabled;
     char hostname[64];
     char fromdhcp[8];
-    char gateway[64];
-    char hwaddress[64];
-    int mtu;
-    int prefix_length;
-    char interface_token[64];
-    char ip_addr[64];
-    //what of ip? char int float of char *?
-    //char ip[65]; change of design 
-    // this is becoming more and more versbose so instead doing this 
-    // addr and searchdoamin and many others using local vars in fns
 };
 /*datafromxml placing here was giving error 
 so instead declared beside struct*/
