@@ -91,21 +91,9 @@ static inline int load_config(const char *filename, config *cfg)
         else if(get_the_tag(line, "hostname", cfg->hostname, sizeof(cfg->hostname)));
             
         else if(get_the_tag(line, "FromDHCP", cfg->fromdhcp, sizeof(cfg->fromdhcp))){}
-        
-            
-        else if(get_the_tag(line, "addr", cfg->ip_addr, sizeof(cfg->ip_addr))); 
-            
-        else if(get_the_tag(line, "gateway", cfg->gateway, sizeof(cfg->gateway)));
-            
-        else if(get_the_tag(line, "hwaddress", cfg->hwaddress, sizeof(cfg->hwaddress)));
-            
-        else if(get_the_tag(line, "interface_token", cfg->interface_token, sizeof(cfg->interface_token)));
-            
-        else if (get_the_tag(line, "mtu", buf, sizeof(buf)))
-                cfg->mtu = atoi(buf);
-            
-        else if (get_the_tag(line, "subnet", buf, sizeof(buf)))
-                cfg->prefix_length = atoi(buf);
+
+        else if (get_the_tag(line, "auth", buf, sizeof(buf)))
+            cfg->auth_enabled = atoi(buf);
     }
 
     fclose(fp);
@@ -176,7 +164,10 @@ int scan_interfaces(Interfacedata *data, int maxitems/*macro for now*/){
     int count = 0;
     for (ifa = ifaddr; ifa != NULL && count < maxitems; ifa = ifa->ifa_next){
         if(ifa->ifa_addr == NULL) continue;
-        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0) {
+        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0
+            && strncmp(ifa->ifa_name, "docker", 6) != 0
+            && strncmp(ifa->ifa_name, "br-", 3) != 0
+            && strncmp(ifa->ifa_name, "veth", 4) != 0) {
                     strncpy(data[count].name, ifa->ifa_name, 31);
                     
                     struct sockaddr_in *paddr = (struct sockaddr_in *)ifa->ifa_addr;

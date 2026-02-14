@@ -123,6 +123,7 @@ void appendusers(const char *request,int accept) {
     if(validationpass == 1){
     // 3. Add the users to CredsWithLevel.csv
     appendToCSV();
+    loadUsers();
     // taken template
                      // ONVIF Spec: CreateUsersResponse is empty on success
                      const char *soap_body =
@@ -189,6 +190,7 @@ void setusers(const char *request,int accept) {
     if(validationpass == 1){
     // 3. Add the users to CredsWithLevel.csv
     setuserscsv();
+    loadUsers();
     // taken template
                      // ONVIF Spec: CreateUsersResponse is empty on success
                      const char *soap_body =
