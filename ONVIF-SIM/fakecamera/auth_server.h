@@ -604,37 +604,48 @@ void *tcpserver(void *arg) {
             }
         }
         else if(strstr(buf, "GetDNS")){
-            // no admin required, same pattern as GetHostname
-                        config cfgdns = {0};
-                        load_config("config.xml", &cfgdns);
-                        // dns fields at top level need direct extraction
-                        char searchdomain[256] = {0}, dnsaddr[64] = {0}, dnstype[16] = {0};
-                        FILE *dnsfp = fopen("config.xml", "r");
-                        if(dnsfp){
-                            char dnsline[256];
-                            while(fgets(dnsline, sizeof(dnsline), dnsfp)){
-                                get_the_tag(dnsline, "searchdomain", searchdomain, sizeof(searchdomain));
-                                get_the_tag(dnsline, "addr", dnsaddr, sizeof(dnsaddr));
-                                // only grab top-level type before <device>
-                                if(!dnstype[0]) get_the_tag(dnsline, "type", dnstype, sizeof(dnstype));
-                                if(strstr(dnsline, "<device>")) break;
-                            }
-                            fclose(dnsfp);
-                        }
-                        char soap_response[2048];
-                        snprintf(soap_response, sizeof(soap_response),
-                                 GET_DNS_RESPONSE_TEMPLATE, cfgdns.fromdhcp,
-                                 searchdomain, dnstype, dnsaddr);
-            
-                        char response[4096];
-                        snprintf(response, sizeof(response),
-                                 "HTTP/1.1 200 OK\r\n"
-                                 "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                                 "Content-Length: %zu\r\n"
-                                 "Connection: close\r\n\r\n%s",
-                                 strlen(soap_response), soap_response);
-            
-                        send(cs, response, strlen(response), 0);
+            printf("[TCP] Req: GetDNS\n");
+            // Read DNS preference from config, DNS server from OS
+            config cfgdns = {0};
+            load_config("config.xml", &cfgdns);
+
+            // Read searchdomain from config.xml (app preference)
+            char searchdomain[256] = {0};
+            FILE *dnsfp = fopen("config.xml", "r");
+            if (dnsfp) {
+                char dnsline[256];
+                while (fgets(dnsline, sizeof(dnsline), dnsfp)) {
+                    get_the_tag(dnsline, "searchdomain", searchdomain, sizeof(searchdomain));
+                    if (strstr(dnsline, "<device>")) break;
+                }
+                fclose(dnsfp);
+            }
+
+            // Read DNS server address from OS (/etc/resolv.conf)
+            char dnsaddr[64] = {0};
+            FILE *resolv_fp = fopen("/etc/resolv.conf", "r");
+            if (resolv_fp) {
+                char rline[256];
+                while (fgets(rline, sizeof(rline), resolv_fp)) {
+                    if (strncmp(rline, "nameserver ", 11) == 0) {
+                        char *ns = rline + 11;
+                        // trim trailing whitespace/newline
+                        char *end = ns + strlen(ns) - 1;
+                        while (end > ns && (*end == '\n' || *end == '\r' || *end == ' '))
+                            *end-- = '\0';
+                        strncpy(dnsaddr, ns, sizeof(dnsaddr) - 1);
+                        break; // first nameserver
+                    }
+                }
+                fclose(resolv_fp);
+            }
+
+            char soap_response[2048];
+            snprintf(soap_response, sizeof(soap_response),
+                     GET_DNS_RESPONSE_TEMPLATE, cfgdns.fromdhcp,
+                     searchdomain, "IPv4", dnsaddr);
+
+            send_soap_ok(cs, soap_response);
         }
         // CASE: GetNetworkDefaultGateway
         else if(strstr(buf, "GetNetworkDefaultGateway")){
@@ -668,16 +679,8 @@ void *tcpserver(void *arg) {
             char soap_response[2048];
             snprintf(soap_response, sizeof(soap_response),
                      GET_NET_GATEWAY_TEMPLATE, os_gateway);
-        
-            char response[4096];
-            snprintf(response, sizeof(response),
-                     "HTTP/1.1 200 OK\r\n"
-                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                     "Content-Length: %zu\r\n"
-                     "Connection: close\r\n\r\n%s",
-                     strlen(soap_response), soap_response);
-        
-            send(cs, response, strlen(response), 0);
+
+            send_soap_ok(cs, soap_response);
         }
         // CASE: SetNetworkDefaultGateway
         else if(strstr(buf, "SetNetworkDefaultGateway")){
