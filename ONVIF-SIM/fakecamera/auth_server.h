@@ -66,6 +66,31 @@ static void send_soap_ok(int cs, const char *soap_body) {
     send(cs, http_response, len, 0);
 }
 
+// Helper: Send WS-Discovery Bye multicast and exit(0) after a flush delay.
+// Used by SetNetworkInterfaces, SetDNS, SetNetworkDefaultGateway — any
+// network-altering operation that requires a process restart.
+static void send_bye_and_exit(int cs) {
+    int bye_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (bye_sock >= 0) {
+        struct sockaddr_in mcast_addr = {0};
+        mcast_addr.sin_family = AF_INET;
+        mcast_addr.sin_port = htons(DISCOVERY_PORT);
+        inet_pton(AF_INET, MULTICAST_ADDR, &mcast_addr.sin_addr);
+        char bye_msg_id[46];
+        generate_messageid(bye_msg_id, sizeof(bye_msg_id));
+        char bye_buf[2048];
+        snprintf(bye_buf, sizeof(bye_buf), WS_DISCOVERY_BYE_TEMPLATE,
+                 bye_msg_id, device_uuid);
+        sendto(bye_sock, bye_buf, strlen(bye_buf), 0,
+               (struct sockaddr *)&mcast_addr, sizeof(mcast_addr));
+        close(bye_sock);
+    }
+    close(cs);
+    printf("[TCP] Configuration applied. Restarting.\n");
+    sleep(SHUTDOWN_FLUSH_DELAY_SEC);
+    exit(0);
+}
+
 // just blind trust for now
 // now some necessary altercations
 // integration of csvparser and also checking if that user exist or not
@@ -528,22 +553,35 @@ void *tcpserver(void *arg) {
     }
 
         else if(strstr(buf, "SetDNS")){
-            // its kinda ready but study of acttual pipeline
-            // effect is yet to be studied
             if(no_auth_mode || has_any_authentication(buf)){
                 char user[256] = {0};
                 extract_header_val(buf, "username", user, sizeof(user));
                 if(no_auth_mode || is_admin(buf, user)){
-                    //actual operations with send success
-                    char thattobeset[256];
-                    extract_tag_value(buf, "FromDHCP", thattobeset, sizeof(thattobeset)); // mandatory
-                    char tagopen[] = "<FromDHCP>";
-                    char tagclose[] = "</FromDHCP>";
-                    setdnsinxml(thattobeset, tagopen, tagclose);
-                    // for optional handling need a whole checkflow
+                    printf("[TCP] Req: SetDNS (Auth+Admin) -> ALLOWED\n");
+
+                    // 1. Extract mandatory FromDHCP flag
+                    char thattobeset[256] = {0};
+                    extract_tag_value(buf, "FromDHCP", thattobeset, sizeof(thattobeset));
+                    int use_dhcp = (strncmp(thattobeset, "true", 4) == 0);
+
+                    // 2. Persist preference to config.xml
+                    setdnsinxml(thattobeset, "<FromDHCP>", "</FromDHCP>");
+
+                    // 3. Handle optional DNS fields (searchdomain, manual addresses)
                     optionalhandlingsdns(buf);
-                    applydnstoservice();
-                   
+
+                    // 4. Apply to system based on DHCP flag
+                    if (use_dhcp) {
+                        // Release any existing static resolv.conf, start dhclient
+                        // dhclient -nw prevents blocking; it runs in background
+                        system("dhclient -r 2>/dev/null; dhclient -nw 2>/dev/null");
+                    } else {
+                        // Static DNS: stop dhclient, then write resolv.conf
+                        system("dhclient -r 2>/dev/null");
+                        applydnstoservice();
+                    }
+
+                    // 5. Send response before restart
                     const char *soap_body =
                         "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                         "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
@@ -552,8 +590,11 @@ void *tcpserver(void *arg) {
                             "</soap:Body>"
                         "</soap:Envelope>";
                     send_soap_ok(cs, soap_body);
+
+                    // 6. Restart: DNS change affects discovery addressing
+                    send_bye_and_exit(cs);
                 }
-                else{// soapfault - try with admin priviledges}
+                else{
                     send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
                 }
             }
@@ -674,6 +715,9 @@ void *tcpserver(void *arg) {
                             "</soap:Body>"
                         "</soap:Envelope>";
                     send_soap_ok(cs, soap_body);
+
+                    // Gateway change affects routing — restart for clean state
+                    send_bye_and_exit(cs);
                 } else {
                     send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
                 }
@@ -864,34 +908,15 @@ void *tcpserver(void *arg) {
                                         "</soap:Envelope>";
                                     send_soap_ok(cs, soap_body);
                 
-                                    // 7. SEND DISCOVERY BYE
-                                    int bye_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-                                    if (bye_sock >= 0) {
-                                        struct sockaddr_in mcast_addr = {0};
-                                        mcast_addr.sin_family = AF_INET;
-                                        mcast_addr.sin_port = htons(DISCOVERY_PORT);
-                                        inet_pton(AF_INET, MULTICAST_ADDR, &mcast_addr.sin_addr);
-                                        char bye_msg_id[46];
-                                        generate_messageid(bye_msg_id, sizeof(bye_msg_id));
-                                        char bye_buf[2048];
-                                        snprintf(bye_buf, sizeof(bye_buf), WS_DISCOVERY_BYE_TEMPLATE, bye_msg_id, device_uuid);
-                                        sendto(bye_sock, bye_buf, strlen(bye_buf), 0, (struct sockaddr *)&mcast_addr, sizeof(mcast_addr));
-                                        close(bye_sock);
-                                    }
-                
-                                    // 8. CLOSE CONNECTION
-                                    close(cs);
-                
-                                    // 9. EXECUTE & DIE
+                                    // 7. EXECUTE NETWORK COMMAND
                                     if (cmd[0]) {
                                         printf("[TCP] Executing: %s\n", cmd);
                                         int ret = system(cmd);
                                         if (ret != 0) fprintf(stderr, "[TCP] Command failed (exit %d)\n", ret);
                                     }
                 
-                                    printf("[TCP] Configuration applied. Restarting.\n");
-                                    sleep(SHUTDOWN_FLUSH_DELAY_SEC);
-                                    exit(0);
+                                    // 8. BYE & RESTART
+                                    send_bye_and_exit(cs);
                 
                                 } else {
                                     printf("[TCP] Req: SetNetworkInterfaces (Not Admin) -> FORBIDDEN\n");

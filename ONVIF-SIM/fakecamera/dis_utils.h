@@ -181,9 +181,11 @@ void generate_xaddrs_list(char *buffer, size_t size, int port) {
     for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
         if (ifa->ifa_addr == NULL) continue;
 
-        // Check for IPv4 (AF_INET) and skip loopback (lo)
-        // copied from previous saved implementation
-        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0) {
+        // Check for IPv4 (AF_INET) and skip loopback + virtual interfaces
+        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0
+            && strncmp(ifa->ifa_name, "docker", 6) != 0
+            && strncmp(ifa->ifa_name, "br-", 3) != 0
+            && strncmp(ifa->ifa_name, "veth", 4) != 0) {
             
             // Convert IP to string
             char ip[INET_ADDRSTRLEN];
