@@ -59,17 +59,6 @@ void *discovery(void *arg) {
   getlocalip(local_ip, sizeof(local_ip));
   printf("Local IP: %s\n", local_ip);
 
-  // Getting device name
-  char device_name[64] = CAMERA_NAME;
-  // getdevicename(device_name, 64);
-  printf("device %s", device_name);
-  
-  char manufacturer[64] = {0};
-  char hardware[64] = {0};
-  char location[64] = {0};
-  char profile[64] = {0};
-  char type[64] = {0};
-
   // always on udp server
   // setupped with port
   int recieversocketudp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -171,8 +160,8 @@ void *discovery(void *arg) {
         
         // build response and send back
         int send_len =
-            build_response(message_id, relates_to_id, message_id, manufacturer, hardware, location, profile, type, /*local_ip*/ xaddrs_list,
-                           send_buf, sizeof(send_buf), device_name);
+            build_response(message_id, relates_to_id, xaddrs_list,
+                           send_buf, sizeof(send_buf));
         FILE *xml = fopen("dis.xml", "w");
         fprintf(xml, "%s", send_buf);
         fclose(xml);

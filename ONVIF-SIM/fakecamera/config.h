@@ -27,6 +27,7 @@ struct datafromxml{
     int auth_enabled;
     char hostname[64];
     char fromdhcp[8];
+    char scopes[1024];
 };
 /*datafromxml placing here was giving error 
 so instead declared beside struct*/
@@ -103,14 +104,8 @@ const char *PROBE_MATCH_TEMPLATE =
     "<a:Address>urn:uuid:%s</a:Address>"
     "</a:EndpointReference>"
     "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
-    "<d:Scopes>onvif://www.onvif.org/name/%s "
-    "onvif://www.onvif.org/auth/0 "
-    "onvif://www.onvif.org/manufacturer/%s "
-    "onvif://www.onvif.org/hardware/%s "
-    "onvif://www.onvif.org/location/%s "
-    "onvif://www.onvif.org/profile/%s "
-    "onvif://www.onvif.org/type/%s</d:Scopes>"
-    "<d:XAddrs>%s</d:XAddrs>"//"<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
+    "<d:Scopes>%s</d:Scopes>"
+    "<d:XAddrs>%s</d:XAddrs>"
     "<d:MetadataVersion>1</d:MetadataVersion>"
     "</d:ProbeMatch>"
     "</d:ProbeMatches>"

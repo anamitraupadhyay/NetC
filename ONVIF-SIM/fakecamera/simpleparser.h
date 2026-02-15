@@ -94,6 +94,8 @@ static inline int load_config(const char *filename, config *cfg)
 
         else if (get_the_tag(line, "auth", buf, sizeof(buf)))
             cfg->auth_enabled = atoi(buf);
+
+        else if(get_the_tag(line, "scopes", cfg->scopes, sizeof(cfg->scopes)));
     }
 
     fclose(fp);

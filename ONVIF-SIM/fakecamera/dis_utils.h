@@ -208,54 +208,28 @@ void generate_xaddrs_list(char *buffer, size_t size, int port) {
 }
 
 
-int build_response(const char *message_id ,const char *relates_to_id, 
-                   const char *message_id1,
-                   const char *manufacturer, const char *hardware,
-                   const char *location, const char *profile, const char *type,
-                   const char *local_ip,
-                   char *buf, size_t size, char *device_name);
-/* Build response*/
+int build_response(const char *message_id, const char *relates_to_id,
+                   const char *xaddrs,
+                   char *buf, size_t size);
+/* Build response — loads config.xml for scopes and device UUID */
 
-int build_response(const char *message_id ,const char *relates_to_id, 
-                   const char *message_id1,
-                   const char *manufacturer, const char *hardware,
-                   const char *location, const char *profile, const char *type,
-                   const char *local_ip,
-                   char *buf, size_t size, char *device_name) {
-                       
+int build_response(const char *message_id, const char *relates_to_id,
+                   const char *xaddrs,
+                   char *buf, size_t size) {
+
   config cfg = {0};
   load_config("config.xml", &cfg);
-  /*if(!load_config("config.xml", &cfg)){// error prone needs serious field 
-                                    // repopulation, became more erred
-      perror("config.xml");
-      int len = snprintf(
-          buf, size, PROBE_MATCH_TEMPLATE,
-          message_id,  // 1. <a:MessageID> (UUID)
-          relates_to_id,   // 2. <a:RelatesTo> (The ID from the request)
-          message_id,
-          device_name,     // 3. Device Name
-          local_ip,        // 4. IP Address
-          CAMERA_HTTP_PORT // 5. Port
-      );
-      return len;
-  }*/
-  // this acts form 
-  int len1 = snprintf(
+
+  int len = snprintf(
       buf, size, PROBE_MATCH_TEMPLATE,
-      message_id, //uuid
-      relates_to_id, //relatesto
-      device_uuid, //etc/machine-id
-      cfg.model, //xml model
-      cfg.manufacturer,
-      cfg.hardware,
-      cfg.location,
-      cfg.profile,
-      cfg.type,
-      local_ip, //not xml ip for now
-      cfg.server_port //xml server port
+      message_id,     // %s MessageID
+      relates_to_id,  // %s RelatesTo
+      device_uuid,    // %s Address (machine-id)
+      cfg.scopes,     // %s Scopes (full string from config.xml)
+      xaddrs          // %s XAddrs (all NICs)
   );
-  return len1;
-  
+  return len;
+
 }
 
 void getdevicename(char *device_name, uint8_t buffersize){

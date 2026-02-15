@@ -18,5 +18,6 @@
         <auth>0</auth>
         <hostname>aupc</hostname>
         <FromDHCP>false</FromDHCP>
+        <scopes>onvif://www.onvif.org/name/Videonetics_Camera_Emulator onvif://www.onvif.org/hardware/VSaasEdgeBox onvif://www.onvif.org/location/Any onvif://www.onvif.org/profile/streaming onvif://www.onvif.org/type/video_encoder</scopes>
     </device>
 </config>
