@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <time.h>
+#include <errno.h>
 
 //#include "config.h"
 #include "simpleparser.h"
@@ -169,6 +170,47 @@ void getlocalip(char *buf, size_t size){
     close(sockfd);
 }
 
+/* Join multicast on every physical NIC (not just the default route interface).
+   INADDR_ANY only joins on ONE interface; this ensures discovery probes
+   arriving on any NIC are received. Returns the number of interfaces joined. */
+int join_multicast_all_nics(int sockfd) {
+    struct ifaddrs *ifaddr, *ifa;
+    int joined = 0;
+
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        return 0;
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) continue;
+        if (ifa->ifa_addr->sa_family != AF_INET) continue;
+        if (strcmp(ifa->ifa_name, "lo") == 0) continue;
+        if (strncmp(ifa->ifa_name, "docker", 6) == 0) continue;
+        if (strncmp(ifa->ifa_name, "br-", 3) == 0) continue;
+        if (strncmp(ifa->ifa_name, "veth", 4) == 0) continue;
+
+        struct ip_mreq mreq;
+        mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
+        mreq.imr_interface = ((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+
+        if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+            char ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &mreq.imr_interface, ip, sizeof(ip));
+            fprintf(stderr, "[Discovery] multicast join failed on %s (%s): %s\n",
+                    ifa->ifa_name, ip, strerror(errno));
+        } else {
+            char ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &mreq.imr_interface, ip, sizeof(ip));
+            printf("[Discovery] Joined multicast %s on %s (%s)\n", MULTICAST_ADDR, ifa->ifa_name, ip);
+            joined++;
+        }
+    }
+
+    freeifaddrs(ifaddr);
+    return joined;
+}
+
 void generate_xaddrs_list(char *buffer, size_t size, int port) {
     struct ifaddrs *ifaddr, *ifa;
     buffer[0] = '\0'; // Start empty
@@ -316,19 +358,14 @@ void load_preloaded_xml() {
   }
   printf("[Preload] Bound to port %d\n", DISCOVERY_PORT);
 
-  // 5. Join multicast
-  struct ip_mreq mreq;
-  mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
-  mreq.imr_interface.s_addr = INADDR_ANY;
-
-  if (setsockopt(recvsocketudp, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq,
-                 sizeof(mreq)) < 0) {
-    perror("multicast join");
+  // 5. Join multicast on ALL physical NICs
+  int joined = join_multicast_all_nics(recvsocketudp);
+  if (joined == 0) {
+    fprintf(stderr, "[Preload] Failed to join multicast on any interface\n");
     close(recvsocketudp);
     return;
   }
-  printf("[Preload] Joined multicast %s\n", MULTICAST_ADDR);
-  printf("[Preload] Listening...  (FAST MODE)\n\n");
+  printf("[Preload] Listening on %d interface(s)...  (FAST MODE)\n\n", joined);
 
   // 6. Main loop - recv and send cached XML directly
   char recv_buf[BUFFER_SIZE];

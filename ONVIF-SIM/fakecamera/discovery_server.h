@@ -92,19 +92,15 @@ void *discovery(void *arg) {
     
     printf("Bound to port %d\n", DISCOVERY_PORT);
     
-    /* Join multicast group - THIS IS THE KEY PART */
-    struct ip_mreq mreq;
-    mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
-    mreq.imr_interface.s_addr = INADDR_ANY;
-    
-    if (setsockopt(recieversocketudp, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-        perror("multicast join");
+    /* Join multicast group on ALL physical NICs */
+    int joined = join_multicast_all_nics(recieversocketudp);
+    if (joined == 0) {
+        fprintf(stderr, "[Discovery] Failed to join multicast on any interface\n");
         close(recieversocketudp);
         return NULL;
     }
-    printf("Joined multicast %s\n", MULTICAST_ADDR);
     
-    printf("\nListening...  (Ctrl+C to stop)\n\n");
+    printf("\nListening on %d interface(s)...  (Ctrl+C to stop)\n\n", joined);
 
     // setting up buffers
     char recv_buf[BUFFER_SIZE];
