@@ -381,6 +381,7 @@ void *tcpserver(void *arg) {
                          GET_DEVICE_INFO_TEMPLATE, request_message_id,
                          device_uuid, cfg2.manufacturer, cfg2.model,
                          firmware_str, cfg2.serial_number, cfg2.hardware);
+                // change this serial number part orchestration and all where actively serial number is being called and sent so that consistency remains
 
                 char response[4096];
                 snprintf(response, sizeof(response),

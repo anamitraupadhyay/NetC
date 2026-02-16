@@ -2,6 +2,7 @@
 #define SIMPLEPARSER_H
 
 #include <arpa/inet.h>
+#include <cstdint>
 #include <ifaddrs.h>
 #include <stdint.h>
 #include <uchar.h>
@@ -100,6 +101,33 @@ static inline int load_config(const char *filename, config *cfg)
 
     fclose(fp);
     return 1;
+}
+
+static uint8_t getcloudconfig(const char *filename){
+    //
+    FILE *file = fopen(filename, "r");
+    char line[256];
+    uint8_t id[16]; // 16-byte ID
+    while (fgets(line, sizeof(line), file))
+    {
+        if (strstr(line, "VTPL_VSAAS_UNIQUE_ID=") != NULL)
+        {
+            //extract the value and return
+            fclose(file);
+            return *id;
+        }
+    }
+
+    fclose(file);
+    return 1;//return some default fallback
+}
+
+static int load_config_for_getdevice_info(const char *filename, config *cfg){
+    FILE *fp = fopen(filename, "r");
+    
+    const char *filename1 = "./vtpl_cnf/vsaas_cloud_config.cnf";
+    getcloudconfig(filename1);
+    // only for th
 }
 
 
