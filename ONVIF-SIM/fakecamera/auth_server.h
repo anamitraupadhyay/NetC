@@ -373,6 +373,13 @@ void *tcpserver(void *arg) {
                      strncpy(cfg2.hardware, "1.0", sizeof(cfg2.hardware)-1);
                 }
 
+                // Prefer serial from generated cnf file; fall back to config.xml
+                char serial_buf[sizeof(cfg2.serial_number)] = {0};
+                if (load_serial_from_cnf(serial_buf, sizeof(serial_buf))) {
+                    strncpy(cfg2.serial_number, serial_buf, sizeof(cfg2.serial_number)-1);
+                    cfg2.serial_number[sizeof(cfg2.serial_number)-1] = '\0';
+                }
+
                 char firmware_str[32];
                 snprintf(firmware_str, sizeof(firmware_str), "%.1f", cfg2.firmware_version);
 
@@ -381,7 +388,6 @@ void *tcpserver(void *arg) {
                          GET_DEVICE_INFO_TEMPLATE, request_message_id,
                          device_uuid, cfg2.manufacturer, cfg2.model,
                          firmware_str, cfg2.serial_number, cfg2.hardware);
-                // change this serial number part orchestration and all where actively serial number is being called and sent so that consistency remains
 
                 char response[4096];
                 snprintf(response, sizeof(response),

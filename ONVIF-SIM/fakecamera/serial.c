@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <ctype.h>
+#include "config.h"
 
 // Function to generate a 16-byte ID based on time in microseconds
 void generate_16byte_id(uint8_t *id)
@@ -37,7 +38,7 @@ void generate_16byte_id(uint8_t *id)
 // Function to check if UUID is already in the file
 int is_uuid_present_in_file()
 {
-    const char *filename = "../vtpl_cnf/vsaas_cloud_config.cnf";
+    const char *filename = CNF_SERIAL_PATH;
     FILE *file = fopen(filename, "r");
 
     if (file == NULL)
@@ -82,7 +83,7 @@ void formattedIdPrint(const uint8_t *id) {
 // Function to write the 16-byte ID in the 8-8-8-8 format with uppercase
 void format_and_write_to_file(const uint8_t *id)
 {
-    const char *filename = "./vtpl_cnf/vsaas_cloud_config.cnf";
+    const char *filename = CNF_SERIAL_PATH;
     FILE *file = fopen(filename, "w+");
 
     if (file == NULL)

@@ -2,7 +2,6 @@
 #define SIMPLEPARSER_H
 
 #include <arpa/inet.h>
-#include <cstdint>
 #include <ifaddrs.h>
 #include <stdint.h>
 #include <uchar.h>
@@ -68,9 +67,6 @@ static inline int load_config(const char *filename, config *cfg)
         else if (get_the_tag(line, "serial_number",
                                    cfg->serial_number,
                                    sizeof(cfg->serial_number)));
-        //here extraction instead of the above 
-        // 2 ways it can be total fix here or below where minimal fix affecting only when needed though consistency is needed 
-        // 
         
         else if(get_the_tag(line, "hardware", 
                                    cfg->hardware, 
@@ -106,31 +102,34 @@ static inline int load_config(const char *filename, config *cfg)
     return 1;
 }
 
-static uint8_t getcloudconfig(const char *filename){
-    //
-    FILE *file = fopen(filename, "r");
+// Read serial number from generated cnf file (vtpl_cnf/vsaas_cloud_config.cnf).
+// Returns 1 on success (serial_out filled), 0 on failure (caller should fall back to config.xml).
+static int load_serial_from_cnf(char *serial_out, size_t serial_size) {
+    if (!serial_out || serial_size == 0) return 0;
+    const char *cnf_path = CNF_SERIAL_PATH;
+    FILE *fp = fopen(cnf_path, "r");
+    if (!fp) return 0;
+
     char line[256];
-    uint8_t id[16]; // 16-byte ID
-    while (fgets(line, sizeof(line), file))
-    {
-        if (strstr(line, "VTPL_VSAAS_UNIQUE_ID=") != NULL)
-        {
-            //extract the value and return
-            fclose(file);
-            return *id;
+    while (fgets(line, sizeof(line), fp)) {
+        const char *prefix = "VTPL_VSAAS_UNIQUE_ID=";
+        char *pos = strstr(line, prefix);
+        if (pos) {
+            pos += strlen(prefix);
+            // Trim trailing newline/whitespace
+            size_t len = strlen(pos);
+            while (len > 0 && (pos[len-1] == '\n' || pos[len-1] == '\r' || pos[len-1] == ' '))
+                len--;
+            if (len == 0) { fclose(fp); return 0; }
+            if (len >= serial_size) len = serial_size - 1;
+            memcpy(serial_out, pos, len);
+            serial_out[len] = '\0';
+            fclose(fp);
+            return 1;
         }
     }
-
-    fclose(file);
-    return 1;//return some default fallback
-}
-
-static int load_config_for_getdevice_info(const char *filename, config *cfg){
-    FILE *fp = fopen(filename, "r");
-    
-    const char *filename1 = "./vtpl_cnf/vsaas_cloud_config.cnf";
-    getcloudconfig(filename1);
-    // only for th
+    fclose(fp);
+    return 0;
 }
 
 

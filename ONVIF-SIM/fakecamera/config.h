@@ -11,6 +11,7 @@
 #define CAMERA_HTTP_PORT    8080 // not udp multicast, for the tcp server that
                                 // handle the all dedicated connectivities
 #define BUFFER_SIZE         65536
+#define CNF_SERIAL_PATH     "vtpl_cnf/vsaas_cloud_config.cnf"
 
 
 struct datafromxml{
