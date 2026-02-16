@@ -68,6 +68,9 @@ static inline int load_config(const char *filename, config *cfg)
         else if (get_the_tag(line, "serial_number",
                                    cfg->serial_number,
                                    sizeof(cfg->serial_number)));
+        //here extraction instead of the above 
+        // 2 ways it can be total fix here or below where minimal fix affecting only when needed though consistency is needed 
+        // 
         
         else if(get_the_tag(line, "hardware", 
                                    cfg->hardware, 
