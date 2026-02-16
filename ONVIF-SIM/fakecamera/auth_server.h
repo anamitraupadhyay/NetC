@@ -193,7 +193,7 @@ static void handle_GetServices(int cs, const char *msg_id, const char *req_buf, 
     const char *med_caps = include_caps ?
         "<tds:Capabilities>"
             "<trt:ProfileCapabilities>"
-                "<trt:MaximumNumberOfProfiles>10</trt:MaximumNumberOfProfiles>"
+                "<trt:MaximumNumberOfProfiles>0</trt:MaximumNumberOfProfiles>"
             "</trt:ProfileCapabilities>"
         "</tds:Capabilities>" : "";
 
@@ -214,13 +214,13 @@ static void handle_GetServices(int cs, const char *msg_id, const char *req_buf, 
                 "<tds:Service>"
                     "<tds:Namespace>http://www.onvif.org/ver10/device/wsdl</tds:Namespace>"
                     "<tds:XAddr>%s</tds:XAddr>"
-                    "<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
+                    "<tds:Version><tt:Major>0</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
                     "%s"
                 "</tds:Service>"
                 "<tds:Service>"
                     "<tds:Namespace>http://www.onvif.org/ver10/media/wsdl</tds:Namespace>"
                     "<tds:XAddr>%s</tds:XAddr>"
-                    "<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>"
+                    "<tds:Version><tt:Major>0</tt:Major><tt:Minor>0</tt:Minor></tds:Version>"
                     "%s"
                 "</tds:Service>"
             "</tds:GetServicesResponse>"
