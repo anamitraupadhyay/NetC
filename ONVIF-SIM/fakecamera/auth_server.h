@@ -907,9 +907,7 @@ void *tcpserver(void *arg) {
                 
                                     // 4. PREPARE COMMAND
                                     // but now with added assurance of netplan
-                                    // [auth_server.h] Inside SetNetworkInterfaces
-
-                                    // ... (Existing extraction of new_ip, new_prefix, iface_name) ...
+                                    // above extraction of new_ip, new_prefix, iface_name
 
                                     char persist_cmd[512];
 
