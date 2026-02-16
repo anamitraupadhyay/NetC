@@ -153,14 +153,23 @@ static int is_valid_iface_name(const char *s) {
 // Handler for GetServices - returns Device and Media service endpoints
 static void handle_GetServices(int cs, const char *msg_id, const char *req_buf, config *cfg) {
     // Use live OS IP so XAddrs reflect actual reachable address
-    char live_ip[64] = {0};
-    getlocalip(live_ip, sizeof(live_ip));
-
-    char device_url[256], media_url[256];
-    snprintf(device_url, sizeof(device_url), "http://%s:%d/onvif/device_service",
-             live_ip, cfg->server_port);
-    snprintf(media_url, sizeof(media_url), "http://%s:%d/onvif/media_service",
-             live_ip, cfg->server_port);
+    char live_ip[INET_ADDRSTRLEN] = {0};
+        struct sockaddr_in local_addr;
+        socklen_t addr_len = sizeof(local_addr);
+    
+        if (getsockname(cs, (struct sockaddr *)&local_addr, &addr_len) == 0) {
+            inet_ntop(AF_INET, &local_addr.sin_addr, live_ip, sizeof(live_ip));
+        } else {
+            // Fallback if getsockname fails (unlikely)
+            getlocalip(live_ip, sizeof(live_ip)); 
+        }
+    
+        // Now generate URLs using the CORRECT interface IP
+        char device_url[256], media_url[256];
+        snprintf(device_url, sizeof(device_url), "http://%s:%d/onvif/device_service",
+                 live_ip, cfg->server_port);
+        snprintf(media_url, sizeof(media_url), "http://%s:%d/onvif/media_service",
+                 live_ip, cfg->server_port);
 
     // Check if client wants capabilities included
     int include_caps = 0;
