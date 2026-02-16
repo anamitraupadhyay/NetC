@@ -19,7 +19,7 @@ struct datafromxml{
     char manufacturer[64];
     char model[64];
     float firmware_version;
-    char serial_number[32];
+    char serial_number[48];
     float hardware_id;
     char type[64];
     char profile[64];

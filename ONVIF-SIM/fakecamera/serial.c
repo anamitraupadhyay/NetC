@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <ctype.h>
+#include <sys/stat.h>
 #include "config.h"
 
 // Function to generate a 16-byte ID based on time in microseconds
@@ -88,7 +89,7 @@ void format_and_write_to_file(const uint8_t *id)
 
     if (file == NULL)
     {
-        perror("Failed to open file = %s");
+        fprintf(stderr, "Failed to open file: %s\n", filename);
         exit(EXIT_FAILURE);
     }
 
@@ -122,6 +123,12 @@ int main()
     {
         printf("UUID already present in the file. No changes made.\n");
         return 0;
+    }
+
+    // Ensure output directory exists
+    struct stat st = {0};
+    if (stat("vtpl_cnf", &st) == -1) {
+        mkdir("vtpl_cnf", 0700);
     }
 
     uint8_t id[16]; // 16-byte ID
