@@ -2,6 +2,7 @@
 #define AUTH_SERVER_H
 
 
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -31,6 +32,13 @@
 
 // Delay before exit to allow Bye and response to flush to network
 #define SHUTDOWN_FLUSH_DELAY_SEC 1
+
+int get_dhcp_sts(char *ifa_name){
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "ip route list dev %s | grep -q 'proto dhcp'", ifa_name);
+    if(system(cmd)==0){return 1;}
+    return 0;
+}
 
 // Helper: Send a 401 Digest challenge response
 static void send_digest_challenge(int cs) {
@@ -777,10 +785,10 @@ void *tcpserver(void *arg) {
                             for (int i = 0; i < count; i++) {
                                 snprintf(token_name, sizeof(token_name), "%s_token", ifaces[i].name);
         
-                                // Use config.xml FromDHCP as the source of truth
-                                // (dhclient may exit after obtaining a lease, making ps-based detection flaky)
-                                strncpy(is_dhcp_str, cfg_live.fromdhcp[0] ? cfg_live.fromdhcp : "false",
-                                        sizeof(is_dhcp_str) - 1);
+                                if(get_dhcp_sts(ifaces[i].name)){
+                                    strncpy(is_dhcp_str, "true", sizeof(is_dhcp_str));
+                                }
+                                else{strncpy(is_dhcp_str, "false", sizeof(is_dhcp_str));}
                                 is_dhcp_str[sizeof(is_dhcp_str) - 1] = '\0';
         
                                 // Build XML with Link Capabilities
