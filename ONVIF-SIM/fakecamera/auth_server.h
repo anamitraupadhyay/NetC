@@ -905,7 +905,43 @@ void *tcpserver(void *arg) {
                 
                                     int use_dhcp = (strncmp(new_dhcp, "true", 4) == 0);
                 
-                                    // 4. PREPARE COMMAND (Do not run yet)
+                                    // 4. PREPARE COMMAND
+                                    // but now with added assurance of netplan
+                                    // [auth_server.h] Inside SetNetworkInterfaces
+
+                                    // ... (Existing extraction of new_ip, new_prefix, iface_name) ...
+
+                                    char persist_cmd[512];
+
+                                    if (use_dhcp) {
+                                      // 1. Enable DHCP, Clear Static IPs
+                                      snprintf(
+                                          persist_cmd, sizeof(persist_cmd),
+                                          "netplan set ethernets.%s.dhcp4=true "
+                                          "ethernets.%s.addresses=[] && "
+                                          "netplan apply",
+                                          iface_name, iface_name);
+                                    } else {
+                                      // 2. Disable DHCP, Set Static IP
+                                      // (Overwrites existing IP list) Note:
+                                      // This preserves Gateway/DNS if they are
+                                      // already in the YAML file!
+                                      snprintf(persist_cmd, sizeof(persist_cmd),
+                                               "netplan set "
+                                               "ethernets.%s.dhcp4=false "
+                                               "ethernets.%s.addresses='[\"%s/"
+                                               "%s\"]' && netplan apply",
+                                               iface_name, iface_name, new_ip,
+                                               new_prefix);
+                                    }
+
+                                    printf("[TCP] Persisting: %s\n",
+                                           persist_cmd);
+                                    system(persist_cmd);
+
+                                    // Now for immediate OS commands
+                                    // (ip addr add...) for speed, then
+                                    // send_bye_and_exit...
                                     char cmd[512] = {0};
                                     if (use_dhcp) {
                                         // Release & Renew
