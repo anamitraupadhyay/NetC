@@ -157,6 +157,21 @@ static int is_valid_iface_name(const char *s) {
     }
     return 1;
 }
+int write_netplan_file(const char *iface, const char *ip, const char *prefix, int use_dhcp) {
+    const char *filename = "/etc/netplan/60-onvif-custom.yaml";
+    FILE *fp = fopen(filename, "w");
+    if (!fp) return -1;
+
+    fprintf(fp, "network:\n  version: 2\n  ethernets:\n    %s:\n", iface);
+    if (use_dhcp) {
+        fprintf(fp, "      dhcp4: true\n");
+    } else {
+        fprintf(fp, "      dhcp4: false\n");
+        if (ip && prefix) fprintf(fp, "      addresses:\n        - %s/%s\n", ip, prefix);
+    }
+    fclose(fp);
+    return 0;
+}
 
 // Handler for GetServices - returns Device and Media service endpoints
 static void handle_GetServices(int cs, const char *msg_id, const char *req_buf, config *cfg) {
@@ -164,14 +179,14 @@ static void handle_GetServices(int cs, const char *msg_id, const char *req_buf, 
     char live_ip[INET_ADDRSTRLEN] = {0};
         struct sockaddr_in local_addr;
         socklen_t addr_len = sizeof(local_addr);
-    
+
         if (getsockname(cs, (struct sockaddr *)&local_addr, &addr_len) == 0) {
             inet_ntop(AF_INET, &local_addr.sin_addr, live_ip, sizeof(live_ip));
         } else {
             // Fallback if getsockname fails (unlikely)
-            getlocalip(live_ip, sizeof(live_ip)); 
+            getlocalip(live_ip, sizeof(live_ip));
         }
-    
+
         // Now generate URLs using the CORRECT interface IP
         char device_url[256], media_url[256];
         snprintf(device_url, sizeof(device_url), "http://%s:%d/onvif/device_service",
@@ -317,7 +332,7 @@ void *tcpserver(void *arg) {
             if(no_auth_mode || has_any_authentication(buf)){
                 char user[256] = {0};
                 extract_header_val(buf, "username", user, sizeof(user));
-                
+
                 if(no_auth_mode || is_admin(buf, user)){
                     char hostnamearr[64];
                     extract_tag_value(buf, "hostname", hostnamearr, sizeof(hostnamearr));
@@ -345,33 +360,41 @@ void *tcpserver(void *arg) {
             }
         }
         else if(strstr(buf, "GetHostname")){
-            // no admin required
-            // ok return devices hostname actual also later setting it actually
-            // for now shifiting towards actual devicename or changing it really
-            /*
-            config cfggethost = {0};
-            if(!load_config("config.xml", &cfggethost)){
-                // fallback default
-                strncpy(cfggethost.hostname, "defhostname", sizeof(cfggethost.hostname)-1);
-                strncpy(cfggethost.fromdhcp, "false", sizeof(cfggethost.fromdhcp)-1);
-            }*/
-            char hostname[HOST_NAME_MAX];
-            gethostname(hostname, sizeof(hostname));
-            char soap_response[2048];
-            snprintf(soap_response, sizeof(soap_response),
-                     GET_HOSTNAME_RESPONSE_TEMPLATE, request_message_id, cfg_live.fromdhcp, hostname);
-
-            char response[4096];
-            snprintf(response, sizeof(response),
-                     "HTTP/1.1 200 OK\r\n"
-                     "Content-Type: application/soap+xml; charset=utf-8\r\n"
-                     "Content-Length: %zu\r\n"
-                     "Connection: close\r\n\r\n%s",
-                     strlen(soap_response), soap_response);
-
-            send(cs, response, strlen(response), 0);
-            //
-        }
+                    char hostname[HOST_NAME_MAX];
+                    gethostname(hostname, sizeof(hostname));
+                    
+                    char is_dhcp_str[10] = "false";
+                    char def_iface[32] = {0};
+                    
+                    // Find default interface (same logic as GetDNS) duh
+                    FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
+                    if (fp) {
+                        if (fgets(def_iface, sizeof(def_iface), fp)) {
+                             def_iface[strcspn(def_iface, "\n")] = 0; // Trim newline
+                             if (get_dhcp_sts(def_iface)) {
+                                 strcpy(is_dhcp_str, "true");
+                             }
+                        }
+                        pclose(fp);
+                    }
+        
+                    char soap_response[2048];
+                    snprintf(soap_response, sizeof(soap_response),
+                             GET_HOSTNAME_RESPONSE_TEMPLATE, 
+                             request_message_id, 
+                             is_dhcp_str, // not cfg_live.fromdhcp
+                             hostname);
+        
+                    char response[4096];
+                    snprintf(response, sizeof(response),
+                             "HTTP/1.1 200 OK\r\n"
+                             "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                             "Content-Length: %zu\r\n"
+                             "Connection: close\r\n\r\n%s",
+                             strlen(soap_response), soap_response);
+        
+                    send(cs, response, strlen(response), 0);
+                }
 
         // CASE 2: GetDeviceInformation (Protected)
         else if (strstr(buf, "GetDeviceInformation")) {
@@ -472,22 +495,22 @@ void *tcpserver(void *arg) {
                 char user[256] = {0};
                 // Try lowercase first
                 extract_header_val1(buf, "username", user, sizeof(user));
-  
+
                 // If empty, try Capitalized "Username"
                 if (user[0] == '\0') {
                     extract_header_val(buf, "Username", user, sizeof(user));
                     printf("extract_header_val1");
                 }
-  
+
                 printf("[DEBUG] Extracted User: '%s'\n", user); // Debug print
                 if(no_auth_mode || (user[0] != '\0' && is_admin(buf, user))){
-                    setusers(buf, cs);// handles the 
+                    setusers(buf, cs);// handles the
                     // parsesetusers also the edgecases too
-                    // now addition of that case that if any user 
+                    // now addition of that case that if any user
                     // doesnt exist in csv the whole process will fail
                     // also need to add the error faults
             }
-            
+
                 else{
                 // User is not admin, send error response
                 send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized to perform this action");
@@ -502,22 +525,22 @@ void *tcpserver(void *arg) {
         else if (strstr(buf, "DeleteUsers")) {
                     if (no_auth_mode || has_any_authentication(buf)) {
                         printf("[TCP] Req: DeleteUsers (Auth Present) -> ALLOWED\n");
-                        
+
                         char user[256] = {0};
                         // Extract the authenticated user to check for Admin privileges
                         extract_header_val1(buf, "username", user, sizeof(user));
                         if (user[0] == '\0') {
                             extract_header_val(buf, "Username", user, sizeof(user));
                         }
-        
+
                         if (no_auth_mode || (user[0] != '\0' && is_admin(buf, user))) {
                             parse_delete_users_xml(buf);
-        
+
                             for (int i = 0; i < numofuserssentdelete; i++) {
                                 deluserscsv(usersdelarray[i].username);
                             }
                             loadUsers();
-        
+
                             // 3. Build the ONVIF-compliant SOAP Success Response
                             const char *soap_body =
                                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
@@ -527,7 +550,7 @@ void *tcpserver(void *arg) {
                                         "<tds:DeleteUsersResponse></tds:DeleteUsersResponse>"
                                     "</soap:Body>"
                                 "</soap:Envelope>";
-        
+
                             send_soap_ok(cs, soap_body);
                         }
                         else {
@@ -629,11 +652,11 @@ void *tcpserver(void *arg) {
         }
         else if(strstr(buf, "GetDNS")){
             printf("[TCP] Req: GetDNS\n");
-            
+
             // 1. Read 'FromDHCP' from cmd & 'SearchDomain' from resolv.conf
             char is_dhcp_str[10] = "false"; // Default to false
             char def_iface[32] = {0};
-            
+
             FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
             if (fp) {
                 if (fgets(def_iface, sizeof(def_iface), fp)) {
@@ -648,7 +671,7 @@ void *tcpserver(void *arg) {
 
             // 2. Read SearchDomain
             char searchdomain[256] = {0};
-            
+
             FILE *resolv_fp = fopen("/etc/resolv.conf", "r");
             if (resolv_fp) {
                 char rline[256];
@@ -657,7 +680,7 @@ void *tcpserver(void *arg) {
                     if (strncmp(rline, "search ", 7) == 0) {
                         strncpy(searchdomain, rline + 7, sizeof(searchdomain) - 1);
                         searchdomain[strcspn(searchdomain, "\n")] = 0; // Remove newline
-                        break; 
+                        break;
                     }
                     if (strncmp(rline, "domain ", 7) == 0) {
                         strncpy(searchdomain, rline + 7, sizeof(searchdomain) - 1);
@@ -694,24 +717,24 @@ void *tcpserver(void *arg) {
                         char *end = ns + strlen(ns) - 1;
                         // Trim all endline chars thats it
                         while (end > ns && (*end == '\n' || *end == '\r' || *end == ' ')) *end-- = '\0';
-                        
+
                         // Append a new XML block for THIS server
                         char entry[256];
-                        snprintf(entry, sizeof(entry), 
+                        snprintf(entry, sizeof(entry),
                             "<tds:DNSManual>"
                                 "<tt:Type>IPv4</tt:Type>"
                                 "<tt:IPv4Address>%s</tt:IPv4Address>"
-                            "</tds:DNSManual>", 
+                            "</tds:DNSManual>",
                             ns);
                         strncat(dns_items_xml, entry, sizeof(dns_items_xml) - strlen(dns_items_xml) - 1);
                     }
                 }
                 fclose(resolv_fp1);
             }
-            
+
             // Fallback if no DNS found, unlikely it should be
             if (dns_items_xml[0] == '\0') {
-                strcpy(dns_items_xml, 
+                strcpy(dns_items_xml,
                     "<tds:DNSManual><tt:Type>IPv4</tt:Type><tt:IPv4Address>8.8.8.8</tt:IPv4Address></tds:DNSManual>");
             }
 
@@ -769,7 +792,7 @@ void *tcpserver(void *arg) {
             if (!os_gateway[0]) {
                 strncpy(os_gateway, "0.0.0.0", sizeof(os_gateway) - 1);
             }
-        
+
             char soap_response[2048];
             snprintf(soap_response, sizeof(soap_response),
                      GET_NET_GATEWAY_TEMPLATE, os_gateway);
@@ -823,22 +846,22 @@ void *tcpserver(void *arg) {
                 send_digest_challenge(cs);
             }
         }
-        
+
         // CASE: GetNetworkInterfaces
                 else if (strstr(buf, "GetNetworkInterfaces")) {
                     if (no_auth_mode || has_any_authentication(buf)) {
                         char user[256] = {0};
                         extract_header_val(buf, "username", user, sizeof(user));
-        
+
                         if (no_auth_mode || is_admin(buf, user)) {
                             printf("[TCP] Req: GetNetworkInterfaces (Auth+Admin) -> ALLOWED\n");
-                            
+
                             Interfacedata ifaces[3];
                             int count = scan_interfaces(ifaces, 3);
-                            
+
                             // [FIX] Declare the response buffer here
-                            char soap_response[16384]; 
-        
+                            char soap_response[16384];
+
                             char *xml_buf = (char *)malloc(8192);
                             // Standard ONVIF Header
                             strcpy(xml_buf, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -846,22 +869,22 @@ void *tcpserver(void *arg) {
                                             "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
                                             "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
                                             "<s:Body><tds:GetNetworkInterfacesResponse>");
-        
+
                             char eachtime[4096];
                             char token_name[64];
                             char is_dhcp_str[10];
-        
+
                             for (int i = 0; i < count; i++) {
                                 snprintf(token_name, sizeof(token_name), "%s_token", ifaces[i].name);
-        
+
                                 if(get_dhcp_sts(ifaces[i].name)){
                                     strncpy(is_dhcp_str, "true", sizeof(is_dhcp_str));
                                 }
                                 else{strncpy(is_dhcp_str, "false", sizeof(is_dhcp_str));}
                                 is_dhcp_str[sizeof(is_dhcp_str) - 1] = '\0';
-        
+
                                 // Build XML with Link Capabilities
-                                snprintf(eachtime, sizeof(eachtime), 
+                                snprintf(eachtime, sizeof(eachtime),
                                     "<tds:NetworkInterfaces token=\"%s\">"
                                         "<tds:Enabled>true</tds:Enabled>"
                                         "<tds:Link>"
@@ -904,7 +927,7 @@ void *tcpserver(void *arg) {
                                 strcat(xml_buf, eachtime);
                             }
                             strcat(xml_buf, "</tds:GetNetworkInterfacesResponse></s:Body></s:Envelope>");
-        
+
                             // Now soap_response is declared and ready to use
                             snprintf(soap_response, sizeof(soap_response),
                                      "HTTP/1.1 200 OK\r\n"
@@ -912,7 +935,7 @@ void *tcpserver(void *arg) {
                                      "Content-Length: %zu\r\n"
                                      "Connection: close\r\n\r\n%s",
                                      strlen(xml_buf), xml_buf);
-        
+
                             send(cs, soap_response, strlen(soap_response), 0);
                             free(xml_buf);
                         } else {
@@ -925,146 +948,105 @@ void *tcpserver(void *arg) {
                     }
                 }
                 // CASE: SetNetworkInterfaces
-                        else if (strstr(buf, "SetNetworkInterfaces")) {
-                            if (no_auth_mode || has_any_authentication(buf)) {
-                                char user[256] = {0};
-                                extract_header_val(buf, "username", user, sizeof(user));
-                
-                                if (no_auth_mode || is_admin(buf, user)) {
-                                    printf("[TCP] Req: SetNetworkInterfaces (Auth+Admin) -> ALLOWED\n");
-                
-                                    // 1. EXTRACT TOKEN
-                                    char req_token[64] = {0};
-                                    extract_tag_value(buf, "InterfaceToken", req_token, sizeof(req_token));
-                
-                                    // 2. RESOLVE INTERFACE (Generic & Risky)
-                                    char iface_name[32] = {0};
-                                    
-                                    if (req_token[0] != '\0') {
-                                        // Logic: "enp3s0_token" -> "enp3s0", "eth0" -> "eth0"
-                                        char *suffix = strstr(req_token, "_token");
-                                        if (suffix) {
-                                            size_t len = suffix - req_token;
-                                            if (len < sizeof(iface_name)) {
-                                                strncpy(iface_name, req_token, len);
-                                                iface_name[len] = '\0';
-                                            }
-                                        } else {
-                                            strncpy(iface_name, req_token, sizeof(iface_name) - 1);
-                                        }
-                                    } else {
-                                        FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
-                                        if (fp) {
-                                            fgets(iface_name, sizeof(iface_name), fp);
-                                            iface_name[strcspn(iface_name, "\n")] = 0; // Remove newline
-                                            pclose(fp);
-                                        }
-                                    }
-                                    // DURING THESE FIXES i remembered that there is setdnsinxml for config in ip_addr tag
-                                    // it is rendered useless since i shifted from state reconciliation pattern for state
-                                    // machines that sets where the server will appear, and so many dead codes are there
-                
-                                    // Basic sanity check to prevent shell injection (keep this!)
-                                    if (!is_valid_iface_name(iface_name)) {
-                                        send_soap_fault(cs, FAULT_INVALID_ARG, "Invalid Interface Token");
-                                        close(cs);
-                                        continue;
-                                    }
-                
-                                    printf("[TCP] Targeting Interface: %s\n", iface_name);
-                
-                                    // 3. EXTRACT SETTINGS
-                                    char new_ip[64] = {0}, new_prefix[16] = {0}, new_dhcp[8] = {0};
-                                    extract_tag_value(buf, "tt:Address", new_ip, sizeof(new_ip));
-                                    extract_tag_value(buf, "tt:PrefixLength", new_prefix, sizeof(new_prefix));
-                                    extract_tag_value(buf, "tt:DHCP", new_dhcp, sizeof(new_dhcp));
-                
-                                    int use_dhcp = (strncmp(new_dhcp, "true", 4) == 0);
-                
-                                    // 4. PREPARE COMMAND
-                                    // but now with added assurance of netplan
-                                    // above extraction of new_ip, new_prefix, iface_name
+                else if (strstr(buf, "SetNetworkInterfaces")) {
+                    if (no_auth_mode || has_any_authentication(buf)) {
+                        char user[256] = {0};
+                        extract_header_val(buf, "username", user, sizeof(user));
 
-                                    char persist_cmd[512];
+                        if (no_auth_mode || is_admin(buf, user)) {
+                            printf("[TCP] Req: SetNetworkInterfaces -> ALLOWED\n");
 
-                                    if (use_dhcp) {
-                                      // 1. Enable DHCP, Clear Static IPs
-                                      snprintf(
-                                          persist_cmd, sizeof(persist_cmd),
-                                          "netplan set ethernets.%s.dhcp4=true "
-                                          "ethernets.%s.addresses=[] && "
-                                          "netplan apply",
-                                          iface_name, iface_name);
-                                    } else {
-                                      // 2. Disable DHCP, Set Static IP
-                                      // (Overwrites existing IP list) Note:
-                                      // This preserves Gateway/DNS if they are
-                                      // already in the YAML file!
-                                      snprintf(persist_cmd, sizeof(persist_cmd),
-                                               "netplan set "
-                                               "ethernets.%s.dhcp4=false "
-                                               "ethernets.%s.addresses='[\"%s/"
-                                               "%s\"]' && netplan apply",
-                                               iface_name, iface_name, new_ip,
-                                               new_prefix);
-                                    }
+                            char req_token[64] = {0};
+                            extract_tag_value(buf, "InterfaceToken", req_token, sizeof(req_token));
 
-                                    printf("[TCP] Persisting: %s\n",
-                                           persist_cmd);
-                                    system(persist_cmd);
-
-                                    // Now for immediate OS commands
-                                    // (ip addr add...) for speed, then
-                                    // send_bye_and_exit...
-                                    char cmd[512] = {0};
-                                    if (use_dhcp) {
-                                        // Release & Renew
-                                        snprintf(cmd, sizeof(cmd), "dhclient -r %s && dhclient -nw %s", iface_name, iface_name);//nw fixes the blocking nature of the dhclient
-                                    } 
-                                    else if (new_ip[0] && new_prefix[0] && is_valid_ipv4(new_ip)) {
-                                        // Flush & Set Static
-                                        snprintf(cmd, sizeof(cmd),
-                                                     "ip addr flush dev %s && ip addr add %s/%s broadcast + dev %s && ip link set %s up",
-                                                     iface_name, new_ip, new_prefix, iface_name, iface_name);
-                                    }
-                
-                                    // 5. UPDATE XML (Only persist user preferences, not network state)
-                                    if (use_dhcp) setdnsinxml("true", "<FromDHCP>", "</FromDHCP>");
-                                    else {
-                                        setdnsinxml("false", "<FromDHCP>", "</FromDHCP>");
-                                    }
-                
-                                    // 6. SEND RESPONSE FIRST (Avoid Timeout)
-                                    const char *soap_body =
-                                        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                                        "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
-                                            "<soap:Body>"
-                                                "<tds:SetNetworkInterfacesResponse>"
-                                                    "<tds:RebootNeeded>true</tds:RebootNeeded>"
-                                                "</tds:SetNetworkInterfacesResponse>"
-                                            "</soap:Body>"
-                                        "</soap:Envelope>";
-                                    send_soap_ok(cs, soap_body);
-                
-                                    // 7. EXECUTE NETWORK COMMAND
-                                    if (cmd[0]) {
-                                        printf("[TCP] Executing: %s\n", cmd);
-                                        int ret = system(cmd);
-                                        if (ret != 0) fprintf(stderr, "[TCP] Command failed (exit %d)\n", ret);
-                                    }
-                
-                                    // 8. BYE & RESTART
-                                    send_bye_and_exit(cs);
-                
+                            char iface_name[32] = {0};
+                            if (req_token[0] != '\0') {
+                                char *suffix = strstr(req_token, "_token");
+                                if (suffix) {
+                                    size_t len = suffix - req_token;
+                                    if (len < sizeof(iface_name)) strncpy(iface_name, req_token, len);
                                 } else {
-                                    printf("[TCP] Req: SetNetworkInterfaces (Not Admin) -> FORBIDDEN\n");
-                                    send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized");
+                                    strncpy(iface_name, req_token, sizeof(iface_name) - 1);
                                 }
                             } else {
-                                printf("[TCP] Req: SetNetworkInterfaces (No Auth) -> CHALLENGE\n");
-                                send_digest_challenge(cs);
+                                strcpy(iface_name, "eth0");
                             }
+
+                            if (!is_valid_iface_name(iface_name)) {
+                                send_soap_fault(cs, FAULT_INVALID_ARG, "Invalid Interface Token");
+                                close(cs);
+                                continue;
+                            }
+
+                            char new_ip[64] = {0}, new_prefix[16] = {0}, new_dhcp[8] = {0};
+                            extract_tag_value(buf, "tt:Address", new_ip, sizeof(new_ip));
+                            extract_tag_value(buf, "tt:PrefixLength", new_prefix, sizeof(new_prefix));
+                            extract_tag_value(buf, "tt:DHCP", new_dhcp, sizeof(new_dhcp));
+
+                            int use_dhcp = (strncmp(new_dhcp, "true", 4) == 0);
+
+                            // FIX: Force /24 if client sends invalid prefix like /32-llm suggestion
+                            int prefix_val = atoi(new_prefix);
+                            if (!use_dhcp && (prefix_val <= 0 || prefix_val >= 32)) {
+                                strcpy(new_prefix, "24");
+                            }
+
+                            // 1. Write Config to Disk
+                            int write_ret = write_netplan_file(iface_name, new_ip, new_prefix, use_dhcp);
+
+                            // 2. Update XML prefs
+                            setdnsinxml(use_dhcp ? "true" : "false", "<FromDHCP>", "</FromDHCP>");
+                            // gehostname might be using the config.fromdhcp pseudodummydata
+                            // as per previous assignment as most are fixed so its left
+                            // now its solved too still did maybe will fix after the conflict ends
+                            // between dummy data and actual both were given but created mess due to it
+
+                            // 3. SEND RESPONSE FIRST (Before killing network)
+                            const char *soap_body =
+                                "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                                "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">"
+                                    "<soap:Body>"
+                                        "<tds:SetNetworkInterfacesResponse>"
+                                            "<tds:RebootNeeded>true</tds:RebootNeeded>"
+                                        "</tds:SetNetworkInterfacesResponse>"
+                                    "</soap:Body>"
+                                "</soap:Envelope>";
+                            send_soap_ok(cs, soap_body);
+
+                            // Allow buffer flush
+                            usleep(200000);
+
+                            // 4. Apply Changes
+                            if (write_ret == 0) {
+                                printf("[TCP] Applying Netplan...\n");
+                                int ret = system("netplan apply");
+
+                                if (ret != 0) {
+                                    // Fallback to manual commands if Netplan fails
+                                    char cmd[512] = {0};
+                                    if (use_dhcp) {
+                                        snprintf(cmd, sizeof(cmd), "dhclient -r %s && dhclient -nw %s", iface_name, iface_name);
+                                    } else {
+                                         snprintf(cmd, sizeof(cmd),
+                                             "dhclient -r %s; "
+                                             "ip addr flush dev %s && "
+                                             "ip addr add %s/%s broadcast + dev %s && "
+                                             "ip link set %s up",
+                                             iface_name, iface_name, new_ip, new_prefix, iface_name, iface_name);
+                                    }
+                                    system(cmd);
+                                }
+                            }
+
+                            send_bye_and_exit(cs);
+
+                        } else {
+                            send_soap_fault(cs, FAULT_NOT_AUTHORIZED, "Sender not authorized");
                         }
+                    } else {
+                        send_digest_challenge(cs);
+                    }
+                }
 
         // CASE: GetServices
         else if (strstr(buf, "GetServices")) {
