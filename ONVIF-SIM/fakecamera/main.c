@@ -3,21 +3,23 @@
 #include <pthread.h>
 #include <signal.h>
 
+static volatile sig_atomic_t g_running = 1;
 static pthread_t t_disc, tcpserv;
 
 static void handle_shutdown(int sig) {
   (void)sig;
-  pthread_cancel(t_disc);
-  pthread_cancel(tcpserv);
+  g_running = 0;
 }
 
 int main(void) {
-  struct sigaction sa;
+  struct sigaction sa = {0};
   sa.sa_handler = handle_shutdown;
-  sa.sa_flags = 0;
   sigemptyset(&sa.sa_mask);
-  sigaction(SIGINT, &sa, NULL);
-  sigaction(SIGTERM, &sa, NULL);
+
+  if (sigaction(SIGINT, &sa, NULL) != 0)
+    perror("sigaction SIGINT");
+  if (sigaction(SIGTERM, &sa, NULL) != 0)
+    perror("sigaction SIGTERM");
 
   if (pthread_create(&t_disc, 
     NULL, discovery, NULL) != 0) {
@@ -35,6 +37,11 @@ int main(void) {
 
   printf("Both servers running. Press Ctrl+C to stop.\n");
 
+  while (g_running)
+    pause();
+
+  pthread_cancel(t_disc);
+  pthread_cancel(tcpserv);
   pthread_join(t_disc, NULL);
   pthread_join(tcpserv, NULL);
 
