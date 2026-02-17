@@ -683,11 +683,12 @@ void *tcpserver(void *arg) {
 
             // 2. THE FIX i.e DNS List from /etc/resolv.conf
             char dns_items_xml[1024] = {0}; // Buffer for multiple DNS entries
-            
-            FILE *resolv_fp = fopen("/etc/resolv.conf", "r");
+            // Renaming it to avoid dangling pointer and above all that can be included in single
+            // pass above in if block
+            FILE *resolv_fp1 = fopen("/etc/resolv.conf", "r");
             if (resolv_fp) {
                 char rline[256];
-                while (fgets(rline, sizeof(rline), resolv_fp)) {
+                while (fgets(rline, sizeof(rline), resolv_fp1)) {
                     if (strncmp(rline, "nameserver ", 11) == 0) {
                         char *ns = rline + 11;
                         char *end = ns + strlen(ns) - 1;
@@ -705,7 +706,7 @@ void *tcpserver(void *arg) {
                         strncat(dns_items_xml, entry, sizeof(dns_items_xml) - strlen(dns_items_xml) - 1);
                     }
                 }
-                fclose(resolv_fp);
+                fclose(resolv_fp1);
             }
             
             // Fallback if no DNS found, unlikely it should be
