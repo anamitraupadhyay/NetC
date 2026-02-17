@@ -748,7 +748,7 @@ void *tcpserver(void *arg) {
                 "<s:Body>"
                     "<tds:GetDNSResponse>"
                         "<tds:DNSInformation>"
-                            "<tds:FromDHCP>%s</tds:FromDHCP>"
+                            "<tt:FromDHCP>%s</tt:FromDHCP>"
                             "<tds:SearchDomain>%s</tds:SearchDomain>"
                             "%s"
                         "</tds:DNSInformation>"
@@ -822,8 +822,41 @@ void *tcpserver(void *arg) {
                                 fprintf(stderr, "[TCP] Failed to apply gateway to OS (exit %d, requires root)\n", ret);
                             }
                         } else {
-                            fprintf(stderr, "[TCP] Invalid gateway format, skipping OS apply\n");
-                        }
+                                                    fprintf(stderr, "[TCP] Invalid gateway format (IPv6/Bad), sending Fault\n");
+                                                    const char *fault_body = 
+                                                        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                                                        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+                                                        "xmlns:ter=\"http://www.onvif.org/ver10/error\">"
+                                                            "<s:Body>"
+                                                                "<s:Fault>"
+                                                                    "<s:Code>"
+                                                                        "<s:Value>s:Sender</s:Value>"
+                                                                        "<s:Subcode>"
+                                                                            "<s:Value>ter:InvalidArgVal</s:Value>"
+                                                                            "<s:Subcode>"
+                                                                                "<s:Value>ter:InvalidGatewayAddress</s:Value>"
+                                                                            "</s:Subcode>"
+                                                                        "</s:Subcode>"
+                                                                    "</s:Code>"
+                                                                    "<s:Reason>"
+                                                                        "<s:Text xml:lang=\"en\">Invalid Gateway Address</s:Text>"
+                                                                    "</s:Reason>"
+                                                                "</s:Fault>"
+                                                            "</s:Body>"
+                                                        "</s:Envelope>";
+                        
+                                                    // Send HTTP 500 (Required for SOAP Faults)
+                                                    char response[4096];
+                                                    snprintf(response, sizeof(response),
+                                                             "HTTP/1.1 500 Internal Server Error\r\n"
+                                                             "Content-Type: application/soap+xml; charset=utf-8\r\n"
+                                                             "Content-Length: %zu\r\n"
+                                                             "Connection: close\r\n\r\n%s",
+                                                             strlen(fault_body), fault_body);
+                                                    
+                                                    send(cs, response, strlen(response), 0);
+                                                    close(cs); continue; // these lines to jump exit later
+                                                }
                     }
 
                     const char *soap_body =
@@ -886,36 +919,36 @@ void *tcpserver(void *arg) {
                                 // Build XML with Link Capabilities
                                 snprintf(eachtime, sizeof(eachtime),
                                     "<tds:NetworkInterfaces token=\"%s\">"
-                                        "<tds:Enabled>true</tds:Enabled>"
-                                        "<tds:Link>"
-                                            "<tt:AdminSettings>"
-                                                "<tt:AutoNegotiation>true</tt:AutoNegotiation>"
-                                                "<tt:Speed>100</tt:Speed>"
-                                                "<tt:Duplex>Full</tt:Duplex>"
-                                            "</tt:AdminSettings>"
-                                            "<tt:OperSettings>"
-                                                "<tt:AutoNegotiation>true</tt:AutoNegotiation>"
-                                                "<tt:Speed>1000</tt:Speed>"
-                                                "<tt:Duplex>Full</tt:Duplex>"
-                                            "</tt:OperSettings>"
-                                            "<tt:InterfaceType>Ethernet</tt:InterfaceType>"
-                                        "</tds:Link>"
-                                        "<tds:Info>"
-                                            "<tt:Name>%s</tt:Name>"
-                                            "<tt:HwAddress>%s</tt:HwAddress>"
-                                            "<tt:MTU>%d</tt:MTU>"
-                                        "</tds:Info>"
-                                        "<tds:IPv4>"
                                             "<tt:Enabled>true</tt:Enabled>"
-                                            "<tt:Config>"
-                                                "<tt:Manual>"
-                                                    "<tt:Address>%s</tt:Address>"
-                                                    "<tt:PrefixLength>%d</tt:PrefixLength>"
-                                                "</tt:Manual>"
-                                                "<tt:DHCP>%s</tt:DHCP>"
-                                            "</tt:Config>"
-                                        "</tds:IPv4>"
-                                    "</tds:NetworkInterfaces>",
+                                            "<tt:Link>"
+                                                "<tt:AdminSettings>"
+                                                    "<tt:AutoNegotiation>true</tt:AutoNegotiation>"
+                                                    "<tt:Speed>100</tt:Speed>"
+                                                    "<tt:Duplex>Full</tt:Duplex>"
+                                                "</tt:AdminSettings>"
+                                                "<tt:OperSettings>"
+                                                    "<tt:AutoNegotiation>true</tt:AutoNegotiation>"
+                                                    "<tt:Speed>1000</tt:Speed>"
+                                                    "<tt:Duplex>Full</tt:Duplex>"
+                                                "</tt:OperSettings>"
+                                                "<tt:InterfaceType>6</tt:InterfaceType>"
+                                            "</tt:Link>"
+                                            "<tt:Info>"
+                                                "<tt:Name>%s</tt:Name>"
+                                                "<tt:HwAddress>%s</tt:HwAddress>"
+                                                "<tt:MTU>%d</tt:MTU>"
+                                            "</tt:Info>"
+                                            "<tt:IPv4>"
+                                                "<tt:Enabled>true</tt:Enabled>"
+                                                "<tt:Config>"
+                                                    "<tt:Manual>"
+                                                        "<tt:Address>%s</tt:Address>"
+                                                        "<tt:PrefixLength>%d</tt:PrefixLength>"
+                                                    "</tt:Manual>"
+                                                    "<tt:DHCP>%s</tt:DHCP>"
+                                                "</tt:Config>"
+                                            "</tt:IPv4>"
+                                        "</tds:NetworkInterfaces>",
                                     token_name,          // Token
                                     ifaces[i].name,      // Name
                                     ifaces[i].mac,       // MAC
@@ -1020,7 +1053,8 @@ void *tcpserver(void *arg) {
                             send_soap_ok(cs, soap_body);
 
                             // Allow buffer flush
-                            usleep(200000);
+                            usleep(10000);// doing faster as its better than suggested than apply netplan and
+                            // essentially burning the bridge and then sending on that bridge
 
                             // 4. Apply Changes
                             if (write_ret == 0) {

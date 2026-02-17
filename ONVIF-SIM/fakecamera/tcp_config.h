@@ -164,7 +164,7 @@ const char *GET_SERVICES_TEMPLATE =
             "<s:Body>"
                 "<tds:GetNetworkDefaultGatewayResponse>"
                     "<tds:NetworkGateway>"
-                        "<tds:IPv4Address>%s</tds:IPv4Address>"
+                        "<tt:IPv4Address>%s</tt:IPv4Address>"
                     "</tds:NetworkGateway>"
                 "</tds:GetNetworkDefaultGatewayResponse>"
             "</s:Body>"

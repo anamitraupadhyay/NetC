@@ -114,23 +114,24 @@ const char *PROBE_MATCH_TEMPLATE =
     "</s:Envelope>";
 
     const char *GET_HOSTNAME_RESPONSE_TEMPLATE = 
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-        "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
-        "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
-        "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">"
-        "<s:Header>"
-            "<a:Action>http://www.onvif.org/ver10/device/wsdl/GetHostnameResponse</a:Action>"
-            "<a:RelatesTo>%s</a:RelatesTo>"
-        "</s:Header>"
-        "<s:Body>"
-            "<tds:GetHostnameResponse>"
-                "<tds:HostnameInformation>"
-                    "<tds:FromDHCP>%s</tds:FromDHCP>"
-                    "<tds:Name>%s</tds:Name>"
-                "</tds:HostnameInformation>"
-            "</tds:GetHostnameResponse>"
-        "</s:Body>"
-        "</s:Envelope>";
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+            "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
+            "xmlns:tt=\"http://www.onvif.org/ver10/schema\" "  
+            "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">"
+            "<s:Header>"
+                "<a:Action>http://www.onvif.org/ver10/device/wsdl/GetHostnameResponse</a:Action>"
+                "<a:RelatesTo>%s</a:RelatesTo>"
+            "</s:Header>"
+            "<s:Body>"
+                "<tds:GetHostnameResponse>"
+                    "<tds:HostnameInformation>"
+                        "<tt:FromDHCP>%s</tt:FromDHCP>"
+                        "<tt:Name>%s</tt:Name>"
+                    "</tds:HostnameInformation>"
+                "</tds:GetHostnameResponse>"
+            "</s:Body>"
+            "</s:Envelope>";
 
     const char *WS_DISCOVERY_BYE_TEMPLATE =
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
