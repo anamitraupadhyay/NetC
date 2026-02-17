@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <time.h>
+#include <errno.h>
 
 //#include "config.h"
 #include "simpleparser.h"
@@ -169,55 +170,108 @@ void getlocalip(char *buf, size_t size){
     close(sockfd);
 }
 
+/* Join multicast on every physical NIC (not just the default route interface).
+   INADDR_ANY only joins on ONE interface; this ensures discovery probes
+   arriving on any NIC are received. Returns the number of interfaces joined. */
+int join_multicast_all_nics(int sockfd) {
+    struct ifaddrs *ifaddr, *ifa;
+    int joined = 0;
 
-int build_response(const char *message_id ,const char *relates_to_id, 
-                   const char *message_id1,
-                   const char *manufacturer, const char *hardware,
-                   const char *location, const char *profile, const char *type,
-                   const char *local_ip,
-                   char *buf, size_t size, char *device_name);
-/* Build response*/
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        return 0;
+    }
 
-int build_response(const char *message_id ,const char *relates_to_id, 
-                   const char *message_id1,
-                   const char *manufacturer, const char *hardware,
-                   const char *location, const char *profile, const char *type,
-                   const char *local_ip,
-                   char *buf, size_t size, char *device_name) {
-                       
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) continue;
+        if (ifa->ifa_addr->sa_family != AF_INET) continue;
+        if (strcmp(ifa->ifa_name, "lo") == 0) continue;
+        if (strncmp(ifa->ifa_name, "docker", 6) == 0) continue;
+        if (strncmp(ifa->ifa_name, "br-", 3) == 0) continue;
+        if (strncmp(ifa->ifa_name, "veth", 4) == 0) continue;
+
+        struct ip_mreq mreq;
+        mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
+        mreq.imr_interface = ((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+
+        if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+            char ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &mreq.imr_interface, ip, sizeof(ip));
+            fprintf(stderr, "[Discovery] multicast join failed on %s (%s): %s\n",
+                    ifa->ifa_name, ip, strerror(errno));
+        } else {
+            char ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &mreq.imr_interface, ip, sizeof(ip));
+            printf("[Discovery] Joined multicast %s on %s (%s)\n", MULTICAST_ADDR, ifa->ifa_name, ip);
+            joined++;
+        }
+    }
+
+    freeifaddrs(ifaddr);
+    return joined;
+}
+
+void generate_xaddrs_list(char *buffer, size_t size, int port) {
+    struct ifaddrs *ifaddr, *ifa;
+    buffer[0] = '\0'; // Start empty
+
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        return;
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) continue;
+
+        // Check for IPv4 (AF_INET) and skip loopback + virtual interfaces
+        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0
+            && strncmp(ifa->ifa_name, "docker", 6) != 0
+            && strncmp(ifa->ifa_name, "br-", 3) != 0
+            && strncmp(ifa->ifa_name, "veth", 4) != 0) {
+            
+            // Convert IP to string
+            char ip[INET_ADDRSTRLEN];
+            struct sockaddr_in *pAddr = (struct sockaddr_in *)ifa->ifa_addr;
+            inet_ntop(AF_INET, &pAddr->sin_addr, ip, INET_ADDRSTRLEN);
+
+            // Append URL to buffer
+            char url[256];
+            snprintf(url, sizeof(url), "http://%s:%d/onvif/device_service", ip, port);
+
+            // Add space if this is not the first entry
+            if (strlen(buffer) > 0) {
+                strncat(buffer, " ", size - strlen(buffer) - 1);
+            }
+            strncat(buffer, url, size - strlen(buffer) - 1);
+        }
+    }
+
+    freeifaddrs(ifaddr);
+}
+
+
+int build_response(const char *message_id, const char *relates_to_id,
+                   const char *xaddrs,
+                   char *buf, size_t size);
+/* Build response — loads config.xml for scopes and device UUID */
+
+int build_response(const char *message_id, const char *relates_to_id,
+                   const char *xaddrs,
+                   char *buf, size_t size) {
+
   config cfg = {0};
   load_config("config.xml", &cfg);
-  /*if(!load_config("config.xml", &cfg)){// error prone needs serious field 
-                                    // repopulation, became more erred
-      perror("config.xml");
-      int len = snprintf(
-          buf, size, PROBE_MATCH_TEMPLATE,
-          message_id,  // 1. <a:MessageID> (UUID)
-          relates_to_id,   // 2. <a:RelatesTo> (The ID from the request)
-          message_id,
-          device_name,     // 3. Device Name
-          local_ip,        // 4. IP Address
-          CAMERA_HTTP_PORT // 5. Port
-      );
-      return len;
-  }*/
-  // this acts form 
-  int len1 = snprintf(
+
+  int len = snprintf(
       buf, size, PROBE_MATCH_TEMPLATE,
-      message_id, //uuid
-      relates_to_id, //relatesto
-      device_uuid, //etc/machine-id
-      cfg.model, //xml model
-      cfg.manufacturer,
-      cfg.hardware,
-      cfg.location,
-      cfg.profile,
-      cfg.type,
-      local_ip, //not xml ip for now
-      cfg.server_port //xml server port
+      message_id,     // %s MessageID
+      relates_to_id,  // %s RelatesTo
+      device_uuid,    // %s Address (machine-id)
+      cfg.scopes,     // %s Scopes (full string from config.xml)
+      xaddrs          // %s XAddrs (all NICs)
   );
-  return len1;
-  
+  return len;
+
 }
 
 void getdevicename(char *device_name, uint8_t buffersize){
@@ -304,19 +358,14 @@ void load_preloaded_xml() {
   }
   printf("[Preload] Bound to port %d\n", DISCOVERY_PORT);
 
-  // 5. Join multicast
-  struct ip_mreq mreq;
-  mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
-  mreq.imr_interface.s_addr = INADDR_ANY;
-
-  if (setsockopt(recvsocketudp, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq,
-                 sizeof(mreq)) < 0) {
-    perror("multicast join");
+  // 5. Join multicast on ALL physical NICs
+  int joined = join_multicast_all_nics(recvsocketudp);
+  if (joined == 0) {
+    fprintf(stderr, "[Preload] Failed to join multicast on any interface\n");
     close(recvsocketudp);
     return;
   }
-  printf("[Preload] Joined multicast %s\n", MULTICAST_ADDR);
-  printf("[Preload] Listening...  (FAST MODE)\n\n");
+  printf("[Preload] Listening on %d interface(s)...  (FAST MODE)\n\n", joined);
 
   // 6. Main loop - recv and send cached XML directly
   char recv_buf[BUFFER_SIZE];

@@ -14,8 +14,8 @@
 #include <fcntl.h>
 #include <string.h>
 
-//#include "config.h"
-//#include "simpleparser.h"
+#include "config.h"
+#include "simpleparser.h"
 #include "dis_utils.h"
 
 // from close observation there are 5 fields to be extracted
@@ -30,6 +30,12 @@
 void *discovery(void *arg) {
     (void)arg; // suppress unused warning
     printf("[DEBUG] process id:%d\n",getpid());
+    
+    config cfg = {0};
+        if (!load_config("config.xml", &cfg)) {
+            printf("[Discovery] Warning: Could not load config.xml, using defaults.\n");
+            cfg.server_port = 8080; // Fallback port
+        }
 
   printf("=== WS-Discovery Server ===\n");
 
@@ -52,17 +58,6 @@ void *discovery(void *arg) {
   char local_ip[64];
   getlocalip(local_ip, sizeof(local_ip));
   printf("Local IP: %s\n", local_ip);
-
-  // Getting device name
-  char device_name[64] = CAMERA_NAME;
-  // getdevicename(device_name, 64);
-  printf("device %s", device_name);
-  
-  char manufacturer[64] = {0};
-  char hardware[64] = {0};
-  char location[64] = {0};
-  char profile[64] = {0};
-  char type[64] = {0};
 
   // always on udp server
   // setupped with port
@@ -97,19 +92,15 @@ void *discovery(void *arg) {
     
     printf("Bound to port %d\n", DISCOVERY_PORT);
     
-    /* Join multicast group - THIS IS THE KEY PART */
-    struct ip_mreq mreq;
-    mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
-    mreq.imr_interface.s_addr = INADDR_ANY;
-    
-    if (setsockopt(recieversocketudp, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-        perror("multicast join");
+    /* Join multicast group on ALL physical NICs */
+    int joined = join_multicast_all_nics(recieversocketudp);
+    if (joined == 0) {
+        fprintf(stderr, "[Discovery] Failed to join multicast on any interface\n");
         close(recieversocketudp);
         return NULL;
     }
-    printf("Joined multicast %s\n", MULTICAST_ADDR);
     
-    printf("\nListening...  (Ctrl+C to stop)\n\n");
+    printf("\nListening on %d interface(s)...  (Ctrl+C to stop)\n\n", joined);
 
     // setting up buffers
     char recv_buf[BUFFER_SIZE];
@@ -160,11 +151,13 @@ void *discovery(void *arg) {
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
         printf("[Probe #%d] from %s\n", probe_count, client_ip);
 
+        char xaddrs_list[1024];
+        generate_xaddrs_list(xaddrs_list, sizeof(xaddrs_list), cfg.server_port);
         
         // build response and send back
         int send_len =
-            build_response(message_id, relates_to_id, message_id, manufacturer, hardware, location, profile, type, local_ip,
-                           send_buf, sizeof(send_buf), device_name);
+            build_response(message_id, relates_to_id, xaddrs_list,
+                           send_buf, sizeof(send_buf));
         FILE *xml = fopen("dis.xml", "w");
         fprintf(xml, "%s", send_buf);
         fclose(xml);
