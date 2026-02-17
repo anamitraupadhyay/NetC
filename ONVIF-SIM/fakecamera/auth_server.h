@@ -969,7 +969,13 @@ void *tcpserver(void *arg) {
                                     strncpy(iface_name, req_token, sizeof(iface_name) - 1);
                                 }
                             } else {
-                                strcpy(iface_name, "eth0");
+                                FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
+                                    if (fp) {
+                                        if (fgets(iface_name, sizeof(iface_name), fp)) {
+                                            iface_name[strcspn(iface_name, "\n")] = 0; // Remove newline
+                                        }
+                                        pclose(fp);
+                                    }
                             }
 
                             if (!is_valid_iface_name(iface_name)) {
