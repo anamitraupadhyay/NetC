@@ -629,46 +629,114 @@ void *tcpserver(void *arg) {
         }
         else if(strstr(buf, "GetDNS")){
             printf("[TCP] Req: GetDNS\n");
-            // Read DNS preference from config, DNS server from OS
-            config cfgdns = {0};
-            load_config("config.xml", &cfgdns);
-
-            // Read searchdomain from config.xml (app preference)
-            char searchdomain[256] = {0};
-            FILE *dnsfp = fopen("config.xml", "r");
-            if (dnsfp) {
-                char dnsline[256];
-                while (fgets(dnsline, sizeof(dnsline), dnsfp)) {
-                    get_the_tag(dnsline, "searchdomain", searchdomain, sizeof(searchdomain));
-                    if (strstr(dnsline, "<device>")) break;
+            
+            // 1. Read 'FromDHCP' from cmd & 'SearchDomain' from resolv.conf
+            char is_dhcp_str[10] = "false"; // Default to false
+            char def_iface[32] = {0};
+            
+            FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
+            if (fp) {
+                if (fgets(def_iface, sizeof(def_iface), fp)) {
+                    def_iface[strcspn(def_iface, "\n")] = 0;
+                    // Reuse your existing helper to check status
+                    if (get_dhcp_sts(def_iface)) {
+                        strcpy(is_dhcp_str, "true");
+                    }
                 }
-                fclose(dnsfp);
+                pclose(fp);
             }
 
-            // Read DNS server address from OS (/etc/resolv.conf)
-            char dnsaddr[64] = {0};
+            // 2. Read SearchDomain
+            char searchdomain[256] = {0};
+            
+            FILE *resolv_fp = fopen("/etc/resolv.conf", "r");
+            if (resolv_fp) {
+                char rline[256];
+                while (fgets(rline, sizeof(rline), resolv_fp)) {
+                    // Look for "search " or "domain "
+                    if (strncmp(rline, "search ", 7) == 0) {
+                        strncpy(searchdomain, rline + 7, sizeof(searchdomain) - 1);
+                        searchdomain[strcspn(searchdomain, "\n")] = 0; // Remove newline
+                        break; 
+                    }
+                    if (strncmp(rline, "domain ", 7) == 0) {
+                        strncpy(searchdomain, rline + 7, sizeof(searchdomain) - 1);
+                        searchdomain[strcspn(searchdomain, "\n")] = 0;
+                        break;
+                    }
+                }
+                fclose(resolv_fp);
+            }
+
+            // Fallback: If OS has none, try config.xml (Optional)
+            if (searchdomain[0] == '\0') {
+                FILE *dnsfp = fopen("config.xml", "r");
+                if (dnsfp) {
+                    char dnsline[256];
+                    while (fgets(dnsline, sizeof(dnsline), dnsfp)) {
+                        get_the_tag(dnsline, "searchdomain", searchdomain, sizeof(searchdomain));
+                        if (strstr(dnsline, "<device>")) break;
+                    }
+                    fclose(dnsfp);
+                }
+            }
+
+            // 2. THE FIX i.e DNS List from /etc/resolv.conf
+            char dns_items_xml[1024] = {0}; // Buffer for multiple DNS entries
+            
             FILE *resolv_fp = fopen("/etc/resolv.conf", "r");
             if (resolv_fp) {
                 char rline[256];
                 while (fgets(rline, sizeof(rline), resolv_fp)) {
                     if (strncmp(rline, "nameserver ", 11) == 0) {
                         char *ns = rline + 11;
-                        // trim trailing whitespace/newline
                         char *end = ns + strlen(ns) - 1;
-                        while (end > ns && (*end == '\n' || *end == '\r' || *end == ' '))
-                            *end-- = '\0';
-                        strncpy(dnsaddr, ns, sizeof(dnsaddr) - 1);
-                        dnsaddr[sizeof(dnsaddr) - 1] = '\0';
-                        break; // first nameserver
+                        // Trim all endline chars thats it
+                        while (end > ns && (*end == '\n' || *end == '\r' || *end == ' ')) *end-- = '\0';
+                        
+                        // Append a new XML block for THIS server
+                        char entry[256];
+                        snprintf(entry, sizeof(entry), 
+                            "<tds:DNSManual>"
+                                "<tt:Type>IPv4</tt:Type>"
+                                "<tt:IPv4Address>%s</tt:IPv4Address>"
+                            "</tds:DNSManual>", 
+                            ns);
+                        strncat(dns_items_xml, entry, sizeof(dns_items_xml) - strlen(dns_items_xml) - 1);
                     }
                 }
                 fclose(resolv_fp);
             }
+            
+            // Fallback if no DNS found, unlikely it should be
+            if (dns_items_xml[0] == '\0') {
+                strcpy(dns_items_xml, 
+                    "<tds:DNSManual><tt:Type>IPv4</tt:Type><tt:IPv4Address>8.8.8.8</tt:IPv4Address></tds:DNSManual>");
+            }
 
-            char soap_response[2048];
+            // 3. Send Response
+            char soap_response[4096];
             snprintf(soap_response, sizeof(soap_response),
-                     GET_DNS_RESPONSE_TEMPLATE, cfgdns.fromdhcp,
-                     searchdomain, "IPv4", dnsaddr);
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+                "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
+                "xmlns:tt=\"http://www.onvif.org/ver10/schema\">"
+                "<s:Body>"
+                    "<tds:GetDNSResponse>"
+                        "<tds:DNSInformation>"
+                            "<tds:FromDHCP>%s</tds:FromDHCP>"
+                            "<tds:SearchDomain>%s</tds:SearchDomain>"
+                            "%s"
+                        "</tds:DNSInformation>"
+                    "</tds:GetDNSResponse>"
+                "</s:Body>"
+                "</s:Envelope>",
+                //cfgdns.fromdhcp[0] ? cfgdns.fromdhcp : "false",
+                is_dhcp_str,
+                searchdomain,
+                dns_items_xml);
+                // still doing dhcp from config as am setting it in set and writing in config
+                // thing is one setting is universal
 
             send_soap_ok(cs, soap_response);
         }
@@ -884,9 +952,16 @@ void *tcpserver(void *arg) {
                                             strncpy(iface_name, req_token, sizeof(iface_name) - 1);
                                         }
                                     } else {
-                                        // Fallback if client sends empty token (Standard says default)
-                                        strcpy(iface_name, "eth0"); 
+                                        FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
+                                        if (fp) {
+                                            fgets(iface_name, sizeof(iface_name), fp);
+                                            iface_name[strcspn(iface_name, "\n")] = 0; // Remove newline
+                                            pclose(fp);
+                                        }
                                     }
+                                    // DURING THESE FIXES i remembered that there is setdnsinxml for config in ip_addr tag
+                                    // it is rendered useless since i shifted from state reconciliation pattern for state
+                                    // machines that sets where the server will appear, and so many dead codes are there
                 
                                     // Basic sanity check to prevent shell injection (keep this!)
                                     if (!is_valid_iface_name(iface_name)) {
