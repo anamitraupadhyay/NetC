@@ -21,6 +21,9 @@
 #include "config.h"
 #include "dis_utils.h"
 #include "simpleparser.h"
+#include "network_config/include/netplan_manager_c_api.h"
+
+#define NETPLAN_CONFIG_PATH "/etc/netplan/60-onvif-custom.yaml"
 
 // HTTP/SOAP response macros to reduce inline string clutter
 #define SOAP_CONTENT_TYPE "Content-Type: application/soap+xml; charset=utf-8\r\n"
@@ -38,6 +41,14 @@ int get_dhcp_sts(char *ifa_name){
     snprintf(cmd, sizeof(cmd), "ip route list dev %s | grep -q 'proto dhcp'", ifa_name);
     if(system(cmd)==0){return 1;}
     return 0;
+}
+
+// Netplan C API based DHCP status check
+int get_dhcp_sts_netplan(void *np_mgr, const char *ifa_name){
+    if (!np_mgr || !ifa_name) return 0;
+    bool dhcp4 = false;
+    netplan_manager_get_config(np_mgr, ifa_name, &dhcp4);
+    return dhcp4 ? 1 : 0;
 }
 
 // Helper: Send a 401 Digest challenge response
@@ -158,19 +169,28 @@ static int is_valid_iface_name(const char *s) {
     return 1;
 }
 int write_netplan_file(const char *iface, const char *ip, const char *prefix, int use_dhcp) {
-    const char *filename = "/etc/netplan/60-onvif-custom.yaml";
-    FILE *fp = fopen(filename, "w");
-    if (!fp) return -1;
-
-    fprintf(fp, "network:\n  version: 2\n  ethernets:\n    %s:\n", iface);
-    if (use_dhcp) {
-        fprintf(fp, "      dhcp4: true\n");
-    } else {
-        fprintf(fp, "      dhcp4: false\n");
-        if (ip && prefix) fprintf(fp, "      addresses:\n        - %s/%s\n", ip, prefix);
+    void *mgr = netplan_manager_create(NETPLAN_CONFIG_PATH);
+    if (!mgr) return -1;
+    if (netplan_manager_read_config(mgr) != 0) {
+        printf("[TCP] Warning: netplan read_config failed, proceeding with update\n");
     }
-    fclose(fp);
-    return 0;
+
+    // Combine IP and Prefix (e.g., "192.168.1.50/24")
+    char full_ip[64] = {0};
+    if (ip && prefix) {
+        snprintf(full_ip, sizeof(full_ip), "%s/%s", ip, prefix);
+    } else if (ip) {
+        snprintf(full_ip, sizeof(full_ip), "%s/24", ip);
+    }
+
+    // Use modify_nic to preserve Gateway/DNS
+    netplan_manager_modify_nic(mgr, iface, use_dhcp,
+                               full_ip[0] ? full_ip : NULL,
+                               NULL, NULL);
+
+    int ret = netplan_manager_apply_changes(mgr);
+    netplan_manager_destroy(mgr);
+    return ret;
 }
 
 // Handler for GetServices - returns Device and Media service endpoints
@@ -253,6 +273,18 @@ void *tcpserver(void *arg) {
     config cfg1 = {0};
     load_config("config.xml", &cfg1);
     printf("ONVIF Server started on port %d\n", cfg1.server_port);
+
+    // Initialize NetPlan manager for network config operations
+    void *np_mgr = netplan_manager_create(NETPLAN_CONFIG_PATH);
+    if (np_mgr) {
+        if (netplan_manager_read_config(np_mgr) == 0) {
+            printf("[TCP] NetPlan manager initialized from %s\n", NETPLAN_CONFIG_PATH);
+        } else {
+            printf("[TCP] Warning: NetPlan manager created but config read failed from %s\n", NETPLAN_CONFIG_PATH);
+        }
+    } else {
+        printf("[TCP] Warning: Could not create NetPlan manager, falling back to system commands\n");
+    }
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) { perror("socket"); return NULL; }
@@ -366,16 +398,29 @@ void *tcpserver(void *arg) {
                     char is_dhcp_str[10] = "false";
                     char def_iface[32] = {0};
                     
-                    // Find default interface (same logic as GetDNS) duh
-                    FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
-                    if (fp) {
-                        if (fgets(def_iface, sizeof(def_iface), fp)) {
-                             def_iface[strcspn(def_iface, "\n")] = 0; // Trim newline
-                             if (get_dhcp_sts(def_iface)) {
-                                 strcpy(is_dhcp_str, "true");
-                             }
+                    // Use netplan C API for DHCP status if manager is available
+                    if (np_mgr) {
+                        // Get first interface from scan
+                        Interfacedata ifaces_hn[3];
+                        int cnt_hn = scan_interfaces(ifaces_hn, 3);
+                        if (cnt_hn > 0) {
+                            strncpy(def_iface, ifaces_hn[0].name, sizeof(def_iface) - 1);
+                            if (get_dhcp_sts_netplan(np_mgr, def_iface)) {
+                                strcpy(is_dhcp_str, "true");
+                            }
                         }
-                        pclose(fp);
+                    } else {
+                        // Fallback to system command
+                        FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
+                        if (fp) {
+                            if (fgets(def_iface, sizeof(def_iface), fp)) {
+                                 def_iface[strcspn(def_iface, "\n")] = 0;
+                                 if (get_dhcp_sts(def_iface)) {
+                                     strcpy(is_dhcp_str, "true");
+                                 }
+                            }
+                            pclose(fp);
+                        }
                     }
         
                     char soap_response[2048];
@@ -617,15 +662,35 @@ void *tcpserver(void *arg) {
                     // 3. Handle optional DNS fields (searchdomain, manual addresses)
                     optionalhandlingsdns(buf);
 
-                    // 4. Apply to system based on DHCP flag
-                    // Always release existing dhclient lease first
-                    system("dhclient -r 2>/dev/null");
-                    if (use_dhcp) {
-                        // Start dhclient; -nw prevents blocking
-                        system("dhclient -nw 2>/dev/null");
+                    // 4. Apply DNS changes using NetPlan C API or fallback
+                    if (np_mgr) {
+                        // Extract DNS address for netplan update
+                        char dns_addr[64] = {0};
+                        extract_tag_value(buf, "tt:IPv4Address", dns_addr, sizeof(dns_addr));
+                        // Update the first NIC's config with new DNS
+                        Interfacedata ifaces_dns_set[3];
+                        int cnt_dns_set = scan_interfaces(ifaces_dns_set, 3);
+                        if (cnt_dns_set > 0) {
+                            // Use modify_nic: pass NULL for IP and Gateway to preserve them
+                            netplan_manager_modify_nic(np_mgr, ifaces_dns_set[0].name,
+                                use_dhcp,
+                                NULL,     // Keep existing IP
+                                NULL,     // Keep existing Gateway
+                                dns_addr[0] ? dns_addr : NULL); // UPDATE DNS
+
+                            netplan_manager_apply_changes(np_mgr);
+                            netplan_manager_read_config(np_mgr);
+                        }
+                        if (!use_dhcp) {
+                            applydnstoservice();
+                        }
                     } else {
-                        // Static DNS: write resolv.conf from config
-                        applydnstoservice();
+                        system("dhclient -r 2>/dev/null");
+                        if (use_dhcp) {
+                            system("dhclient -nw 2>/dev/null");
+                        } else {
+                            applydnstoservice();
+                        }
                     }
 
                     // 5. Send response before restart
@@ -653,20 +718,31 @@ void *tcpserver(void *arg) {
         else if(strstr(buf, "GetDNS")){
             printf("[TCP] Req: GetDNS\n");
 
-            // 1. Read 'FromDHCP' from cmd & 'SearchDomain' from resolv.conf
+            // 1. Read 'FromDHCP' using netplan C API
             char is_dhcp_str[10] = "false"; // Default to false
             char def_iface[32] = {0};
 
-            FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
-            if (fp) {
-                if (fgets(def_iface, sizeof(def_iface), fp)) {
-                    def_iface[strcspn(def_iface, "\n")] = 0;
-                    // Reuse your existing helper to check status
-                    if (get_dhcp_sts(def_iface)) {
+            if (np_mgr) {
+                // Use netplan C API for DHCP status
+                Interfacedata ifaces_dns[3];
+                int cnt_dns = scan_interfaces(ifaces_dns, 3);
+                if (cnt_dns > 0) {
+                    strncpy(def_iface, ifaces_dns[0].name, sizeof(def_iface) - 1);
+                    if (get_dhcp_sts_netplan(np_mgr, def_iface)) {
                         strcpy(is_dhcp_str, "true");
                     }
                 }
-                pclose(fp);
+            } else {
+                FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
+                if (fp) {
+                    if (fgets(def_iface, sizeof(def_iface), fp)) {
+                        def_iface[strcspn(def_iface, "\n")] = 0;
+                        if (get_dhcp_sts(def_iface)) {
+                            strcpy(is_dhcp_str, "true");
+                        }
+                    }
+                    pclose(fp);
+                }
             }
 
             // 2. Read SearchDomain
@@ -811,15 +887,34 @@ void *tcpserver(void *arg) {
                     extract_tag_value(buf, "IPv4Address", new_gw, sizeof(new_gw));
 
                     if (new_gw[0]) {
-                        // Apply route to OS immediately (network state lives in the OS, not config.xml)
                         if (is_valid_ipv4(new_gw)) {
-                            char cmd[256];
-                            snprintf(cmd, sizeof(cmd),
-                                     "ip route del default 2>/dev/null; ip route add default via %s",
-                                     new_gw);
-                            int ret = system(cmd);
-                            if (ret != 0) {
-                                fprintf(stderr, "[TCP] Failed to apply gateway to OS (exit %d, requires root)\n", ret);
+                            // Use NetPlan C API to update gateway via config
+                            if (np_mgr) {
+                                Interfacedata ifaces_gw[3];
+                                int cnt_gw = scan_interfaces(ifaces_gw, 3);
+                                if (cnt_gw > 0) {
+                                    // Use modify_nic: pass NULL for IP and DNS to preserve them
+                                    netplan_manager_modify_nic(np_mgr, ifaces_gw[0].name,
+                                                               false,   // Keep DHCP false
+                                                               NULL,    // Keep existing IP
+                                                               new_gw,  // UPDATE Gateway
+                                                               NULL);   // Keep existing DNS
+
+                                    int ret = netplan_manager_apply_changes(np_mgr);
+                                    if (ret != 0) {
+                                        fprintf(stderr, "[TCP] NetPlan apply failed for gateway (ret %d)\n", ret);
+                                    }
+                                    netplan_manager_read_config(np_mgr);
+                                }
+                            } else {
+                                char cmd[256];
+                                snprintf(cmd, sizeof(cmd),
+                                         "ip route del default 2>/dev/null; ip route add default via %s",
+                                         new_gw);
+                                int ret = system(cmd);
+                                if (ret != 0) {
+                                    fprintf(stderr, "[TCP] Failed to apply gateway to OS (exit %d, requires root)\n", ret);
+                                }
                             }
                         } else {
                                                     fprintf(stderr, "[TCP] Invalid gateway format (IPv6/Bad), sending Fault\n");
@@ -910,10 +1005,17 @@ void *tcpserver(void *arg) {
                             for (int i = 0; i < count; i++) {
                                 snprintf(token_name, sizeof(token_name), "%s_token", ifaces[i].name);
 
-                                if(get_dhcp_sts(ifaces[i].name)){
-                                    strncpy(is_dhcp_str, "true", sizeof(is_dhcp_str));
+                                if (np_mgr) {
+                                    if(get_dhcp_sts_netplan(np_mgr, ifaces[i].name)){
+                                        strncpy(is_dhcp_str, "true", sizeof(is_dhcp_str));
+                                    }
+                                    else{strncpy(is_dhcp_str, "false", sizeof(is_dhcp_str));}
+                                } else {
+                                    if(get_dhcp_sts(ifaces[i].name)){
+                                        strncpy(is_dhcp_str, "true", sizeof(is_dhcp_str));
+                                    }
+                                    else{strncpy(is_dhcp_str, "false", sizeof(is_dhcp_str));}
                                 }
-                                else{strncpy(is_dhcp_str, "false", sizeof(is_dhcp_str));}
                                 is_dhcp_str[sizeof(is_dhcp_str) - 1] = '\0';
 
                                 // Build XML with Link Capabilities
@@ -1002,13 +1104,12 @@ void *tcpserver(void *arg) {
                                     strncpy(iface_name, req_token, sizeof(iface_name) - 1);
                                 }
                             } else {
-                                FILE *fp = popen("ip route show default | awk '/dev/ {print $5}' | head -n 1", "r");
-                                    if (fp) {
-                                        if (fgets(iface_name, sizeof(iface_name), fp)) {
-                                            iface_name[strcspn(iface_name, "\n")] = 0; // Remove newline
-                                        }
-                                        pclose(fp);
-                                    }
+                                // Fallback: get first physical interface from scan
+                                Interfacedata ifaces_sni[3];
+                                int cnt_sni = scan_interfaces(ifaces_sni, 3);
+                                if (cnt_sni > 0) {
+                                    strncpy(iface_name, ifaces_sni[0].name, sizeof(iface_name) - 1);
+                                }
                             }
 
                             if (!is_valid_iface_name(iface_name)) {
@@ -1028,17 +1129,35 @@ void *tcpserver(void *arg) {
                             int prefix_val = atoi(new_prefix);
                             if (!use_dhcp && (prefix_val <= 0 || prefix_val >= 32)) {
                                 strcpy(new_prefix, "24");
+                                prefix_val = 24;
                             }
 
-                            // 1. Write Config to Disk
-                            int write_ret = write_netplan_file(iface_name, new_ip, new_prefix, use_dhcp);
+                            // 1. Use NetPlan C API to update and apply config
+                            int apply_ret = -1;
+                            if (np_mgr) {
+                                // Format IP/Prefix for modify_nic
+                                char full_ip[64] = {0};
+                                if (!use_dhcp && new_ip[0]) {
+                                    snprintf(full_ip, sizeof(full_ip), "%s/%d", new_ip, prefix_val);
+                                }
+
+                                // Use modify_nic to preserve Gateway/DNS
+                                netplan_manager_modify_nic(np_mgr, iface_name,
+                                    use_dhcp,
+                                    full_ip[0] ? full_ip : NULL,
+                                    NULL,   // Keep Gateway
+                                    NULL);  // Keep DNS
+
+                                apply_ret = netplan_manager_apply_changes(np_mgr);
+                                // Reload config after apply
+                                netplan_manager_read_config(np_mgr);
+                            } else {
+                                // Fallback to the old write_netplan_file function
+                                apply_ret = write_netplan_file(iface_name, new_ip, new_prefix, use_dhcp);
+                            }
 
                             // 2. Update XML prefs
                             setdnsinxml(use_dhcp ? "true" : "false", "<FromDHCP>", "</FromDHCP>");
-                            // gehostname might be using the config.fromdhcp pseudodummydata
-                            // as per previous assignment as most are fixed so its left
-                            // now its solved too still did maybe will fix after the conflict ends
-                            // between dummy data and actual both were given but created mess due to it
 
                             // 3. SEND RESPONSE FIRST (Before killing network)
                             const char *soap_body =
@@ -1053,29 +1172,10 @@ void *tcpserver(void *arg) {
                             send_soap_ok(cs, soap_body);
 
                             // Allow buffer flush
-                            usleep(10000);// doing faster as its better than suggested than apply netplan and
-                            // essentially burning the bridge and then sending on that bridge
+                            usleep(10000);
 
-                            // 4. Apply Changes
-                            if (write_ret == 0) {
-                                printf("[TCP] Applying Netplan...\n");
-                                int ret = system("netplan apply");
-
-                                if (ret != 0) {
-                                    // Fallback to manual commands if Netplan fails
-                                    char cmd[512] = {0};
-                                    if (use_dhcp) {
-                                        snprintf(cmd, sizeof(cmd), "dhclient -r %s && dhclient -nw %s", iface_name, iface_name);
-                                    } else {
-                                         snprintf(cmd, sizeof(cmd),
-                                             "dhclient -r %s; "
-                                             "ip addr flush dev %s && "
-                                             "ip addr add %s/%s broadcast + dev %s && "
-                                             "ip link set %s up",
-                                             iface_name, iface_name, new_ip, new_prefix, iface_name, iface_name);
-                                    }
-                                    system(cmd);
-                                }
+                            if (apply_ret != 0) {
+                                printf("[TCP] NetPlan apply returned %d\n", apply_ret);
                             }
 
                             send_bye_and_exit(cs);
@@ -1101,6 +1201,10 @@ void *tcpserver(void *arg) {
         }
 
         close(cs);
+    }
+    if (np_mgr) {
+        netplan_manager_destroy(np_mgr);
+        np_mgr = NULL;
     }
     close(sock);
     return NULL;

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.2.1)
+cmake_minimum_required(VERSION 3.10)
 project(netplan_config VERSION 0.1.0)
 find_package(Poco REQUIRED COMPONENTS Foundation Util Net XML JSON)
 find_package(yaml-cpp REQUIRED)
@@ -18,7 +18,8 @@ add_library(bm_library STATIC
     bm/hxml.c
 )
 target_include_directories(bm_library
-    PUBLIC bm)
+    PUBLIC bm
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(bm_library PRIVATE -fPIC)
 add_library(netplan_config SHARED
     src/NetplanManager.cpp
@@ -28,9 +29,9 @@ add_library(netplan_config SHARED
 target_link_libraries(bm_library
 PRIVATE pthread)
 
-include_directories(netplan_config
-    PUBLIC include
-    ${Poco_INCLUDE_DIRS}
+target_include_directories(netplan_config
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${Poco_INCLUDE_DIRS}
 )
 target_link_libraries(netplan_config PRIVATE yaml-cpp bm_library ${Poco_LIBRARIES})
 target_compile_definitions(netplan_config

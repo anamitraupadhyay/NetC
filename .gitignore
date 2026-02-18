@@ -12,3 +12,4 @@ cmake_install.cmake
 CMakeCache.txt
 Makefile
 _codeql_detected_source_root
+*.o
