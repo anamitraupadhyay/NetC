@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.10)
-project(onvif_fakecamera C)
+project(onvif_fakecamera C CXX)
 
 # Set C standard
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+
+# Set C++ standard for network_config subproject
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required packages
 find_package(Threads REQUIRED)
@@ -12,6 +16,9 @@ find_package(OpenSSL REQUIRED)
 # Enable pthread support
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+
+# --- Build the network_config library (NetPlan Manager C API) ---
+add_subdirectory(network_config)
 
 # --- Serial number generator (runs once to create vtpl_cnf/vsaas_cloud_config.cnf) ---
 add_executable(serial_gen serial.c)
@@ -47,4 +54,5 @@ target_link_libraries(m PRIVATE
     Threads::Threads
     OpenSSL::SSL
     OpenSSL::Crypto
+    netplan_config
 )
