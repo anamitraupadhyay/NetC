@@ -18,7 +18,8 @@ add_library(bm_library STATIC
     bm/hxml.c
 )
 target_include_directories(bm_library
-    PUBLIC bm)
+    PUBLIC bm
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(bm_library PRIVATE -fPIC)
 add_library(netplan_config SHARED
     src/NetplanManager.cpp
