@@ -171,7 +171,9 @@ static int is_valid_iface_name(const char *s) {
 int write_netplan_file(const char *iface, const char *ip, const char *prefix, int use_dhcp) {
     void *mgr = netplan_manager_create(NETPLAN_CONFIG_PATH);
     if (!mgr) return -1;
-    netplan_manager_read_config(mgr);
+    if (netplan_manager_read_config(mgr) != 0) {
+        printf("[TCP] Warning: netplan read_config failed, proceeding with update\n");
+    }
     int prefix_len = prefix ? atoi(prefix) : 24;
     netplan_manager_update_config(mgr, iface, use_dhcp ? true : false,
                                   ip ? ip : "", prefix_len,
@@ -265,8 +267,11 @@ void *tcpserver(void *arg) {
     // Initialize NetPlan manager for network config operations
     void *np_mgr = netplan_manager_create(NETPLAN_CONFIG_PATH);
     if (np_mgr) {
-        netplan_manager_read_config(np_mgr);
-        printf("[TCP] NetPlan manager initialized from %s\n", NETPLAN_CONFIG_PATH);
+        if (netplan_manager_read_config(np_mgr) == 0) {
+            printf("[TCP] NetPlan manager initialized from %s\n", NETPLAN_CONFIG_PATH);
+        } else {
+            printf("[TCP] Warning: NetPlan manager created but config read failed from %s\n", NETPLAN_CONFIG_PATH);
+        }
     } else {
         printf("[TCP] Warning: Could not create NetPlan manager, falling back to system commands\n");
     }
