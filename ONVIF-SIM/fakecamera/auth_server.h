@@ -174,10 +174,20 @@ int write_netplan_file(const char *iface, const char *ip, const char *prefix, in
     if (netplan_manager_read_config(mgr) != 0) {
         printf("[TCP] Warning: netplan read_config failed, proceeding with update\n");
     }
-    int prefix_len = prefix ? atoi(prefix) : 24;
-    netplan_manager_update_config(mgr, iface, use_dhcp ? true : false,
-                                  ip ? ip : "", prefix_len,
-                                  "", "");
+
+    // Combine IP and Prefix (e.g., "192.168.1.50/24")
+    char full_ip[64] = {0};
+    if (ip && prefix) {
+        snprintf(full_ip, sizeof(full_ip), "%s/%s", ip, prefix);
+    } else if (ip) {
+        snprintf(full_ip, sizeof(full_ip), "%s/24", ip);
+    }
+
+    // Use modify_nic to preserve Gateway/DNS
+    netplan_manager_modify_nic(mgr, iface, use_dhcp,
+                               full_ip[0] ? full_ip : NULL,
+                               NULL, NULL);
+
     int ret = netplan_manager_apply_changes(mgr);
     netplan_manager_destroy(mgr);
     return ret;
@@ -661,12 +671,13 @@ void *tcpserver(void *arg) {
                         Interfacedata ifaces_dns_set[3];
                         int cnt_dns_set = scan_interfaces(ifaces_dns_set, 3);
                         if (cnt_dns_set > 0) {
-                            bool cur_dhcp = false;
-                            netplan_manager_get_config(np_mgr, ifaces_dns_set[0].name, &cur_dhcp);
-                            netplan_manager_update_config(np_mgr, ifaces_dns_set[0].name,
-                                use_dhcp ? true : cur_dhcp,
-                                ifaces_dns_set[0].ip, ifaces_dns_set[0].prefix_len,
-                                "", dns_addr[0] ? dns_addr : "");
+                            // Use modify_nic: pass NULL for IP and Gateway to preserve them
+                            netplan_manager_modify_nic(np_mgr, ifaces_dns_set[0].name,
+                                use_dhcp,
+                                NULL,     // Keep existing IP
+                                NULL,     // Keep existing Gateway
+                                dns_addr[0] ? dns_addr : NULL); // UPDATE DNS
+
                             netplan_manager_apply_changes(np_mgr);
                             netplan_manager_read_config(np_mgr);
                         }
@@ -882,18 +893,18 @@ void *tcpserver(void *arg) {
                                 Interfacedata ifaces_gw[3];
                                 int cnt_gw = scan_interfaces(ifaces_gw, 3);
                                 if (cnt_gw > 0) {
-                                    bool dhcp4 = false;
-                                    netplan_manager_get_config(np_mgr, ifaces_gw[0].name, &dhcp4);
-                                    if (!dhcp4) {
-                                        netplan_manager_update_config(np_mgr, ifaces_gw[0].name,
-                                            false, ifaces_gw[0].ip, ifaces_gw[0].prefix_len,
-                                            new_gw, "");
-                                        int ret = netplan_manager_apply_changes(np_mgr);
-                                        if (ret != 0) {
-                                            fprintf(stderr, "[TCP] NetPlan apply failed for gateway (ret %d)\n", ret);
-                                        }
-                                        netplan_manager_read_config(np_mgr);
+                                    // Use modify_nic: pass NULL for IP and DNS to preserve them
+                                    netplan_manager_modify_nic(np_mgr, ifaces_gw[0].name,
+                                                               false,   // Keep DHCP false
+                                                               NULL,    // Keep existing IP
+                                                               new_gw,  // UPDATE Gateway
+                                                               NULL);   // Keep existing DNS
+
+                                    int ret = netplan_manager_apply_changes(np_mgr);
+                                    if (ret != 0) {
+                                        fprintf(stderr, "[TCP] NetPlan apply failed for gateway (ret %d)\n", ret);
                                     }
+                                    netplan_manager_read_config(np_mgr);
                                 }
                             } else {
                                 char cmd[256];
@@ -1124,11 +1135,19 @@ void *tcpserver(void *arg) {
                             // 1. Use NetPlan C API to update and apply config
                             int apply_ret = -1;
                             if (np_mgr) {
-                                netplan_manager_update_config(np_mgr, iface_name,
-                                    use_dhcp ? true : false,
-                                    new_ip[0] ? new_ip : "",
-                                    prefix_val,
-                                    "", "");
+                                // Format IP/Prefix for modify_nic
+                                char full_ip[64] = {0};
+                                if (!use_dhcp && new_ip[0]) {
+                                    snprintf(full_ip, sizeof(full_ip), "%s/%d", new_ip, prefix_val);
+                                }
+
+                                // Use modify_nic to preserve Gateway/DNS
+                                netplan_manager_modify_nic(np_mgr, iface_name,
+                                    use_dhcp,
+                                    full_ip[0] ? full_ip : NULL,
+                                    NULL,   // Keep Gateway
+                                    NULL);  // Keep DNS
+
                                 apply_ret = netplan_manager_apply_changes(np_mgr);
                                 // Reload config after apply
                                 netplan_manager_read_config(np_mgr);
