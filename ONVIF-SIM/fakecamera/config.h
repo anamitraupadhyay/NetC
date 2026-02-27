@@ -11,6 +11,7 @@
 #define CAMERA_HTTP_PORT    8080 // not udp multicast, for the tcp server that
                                 // handle the all dedicated connectivities
 #define BUFFER_SIZE         65536
+#define CNF_SERIAL_PATH     "vtpl_cnf/vsaas_cloud_config.cnf"
 
 
 struct datafromxml{
@@ -18,24 +19,16 @@ struct datafromxml{
     char manufacturer[64];
     char model[64];
     float firmware_version;
-    char serial_number[32];
+    char serial_number[48];
     float hardware_id;
     char type[64];
     char profile[64];
     char hardware[64];
     char location[64];
+    int auth_enabled;
     char hostname[64];
     char fromdhcp[8];
-    char gateway[64];
-    char hwaddress[64];
-    int mtu;
-    int prefix_length;
-    char interface_token[64];
-    char ip_addr[64];
-    //what of ip? char int float of char *?
-    //char ip[65]; change of design 
-    // this is becoming more and more versbose so instead doing this 
-    // addr and searchdoamin and many others using local vars in fns
+    char scopes[1024];
 };
 /*datafromxml placing here was giving error 
 so instead declared beside struct*/
@@ -77,7 +70,7 @@ const char *NET_IF_ITEM =
                         "<tt:Address>%s</tt:Address>"
                         "<tt:PrefixLength>%d</tt:PrefixLength>"
                     "</tt:Manual>"
-                    "<tt:DHCP>true</tt:DHCP>"
+                    "<tt:DHCP>%s</tt:DHCP>"
                 "</tt:Config>"
             "</tds:IPv4>"
         "</tds:NetworkInterfaces>";
@@ -112,14 +105,8 @@ const char *PROBE_MATCH_TEMPLATE =
     "<a:Address>urn:uuid:%s</a:Address>"
     "</a:EndpointReference>"
     "<d:Types>dn:NetworkVideoTransmitter</d:Types>"
-    "<d:Scopes>onvif://www.onvif.org/name/%s "
-    "onvif://www.onvif.org/auth/1 "
-    "onvif://www.onvif.org/manufacturer/%s "
-    "onvif://www.onvif.org/hardware/%s "
-    "onvif://www.onvif.org/location/%s "
-    "onvif://www.onvif.org/profile/%s "
-    "onvif://www.onvif.org/type/%s</d:Scopes>"
-    "<d:XAddrs>http://%s:%d/onvif/device_service</d:XAddrs>"
+    "<d:Scopes>%s</d:Scopes>"
+    "<d:XAddrs>%s</d:XAddrs>"
     "<d:MetadataVersion>1</d:MetadataVersion>"
     "</d:ProbeMatch>"
     "</d:ProbeMatches>"
@@ -127,22 +114,44 @@ const char *PROBE_MATCH_TEMPLATE =
     "</s:Envelope>";
 
     const char *GET_HOSTNAME_RESPONSE_TEMPLATE = 
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
+            "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
+            "xmlns:tt=\"http://www.onvif.org/ver10/schema\" "  
+            "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">"
+            "<s:Header>"
+                "<a:Action>http://www.onvif.org/ver10/device/wsdl/GetHostnameResponse</a:Action>"
+                "<a:RelatesTo>%s</a:RelatesTo>"
+            "</s:Header>"
+            "<s:Body>"
+                "<tds:GetHostnameResponse>"
+                    "<tds:HostnameInformation>"
+                        "<tt:FromDHCP>%s</tt:FromDHCP>"
+                        "<tt:Name>%s</tt:Name>"
+                    "</tds:HostnameInformation>"
+                "</tds:GetHostnameResponse>"
+            "</s:Body>"
+            "</s:Envelope>";
+
+    const char *WS_DISCOVERY_BYE_TEMPLATE =
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
         "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
-        "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" "
-        "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\">"
+        "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
+        "xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\">"
         "<s:Header>"
-            "<a:Action>http://www.onvif.org/ver10/device/wsdl/GetHostnameResponse</a:Action>"
-            "<a:RelatesTo>%s</a:RelatesTo>"
+            "<a:Action s:mustUnderstand=\"1\">"
+                "http://schemas.xmlsoap.org/ws/2005/04/discovery/Bye"
+            "</a:Action>"
+            "<a:MessageID>urn:uuid:%s</a:MessageID>"
+            "<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>"
         "</s:Header>"
         "<s:Body>"
-            "<tds:GetHostnameResponse>"
-                "<tds:HostnameInformation>"
-                    "<tds:FromDHCP>%s</tds:FromDHCP>"
-                    "<tds:Name>%s</tds:Name>"
-                "</tds:HostnameInformation>"
-            "</tds:GetHostnameResponse>"
+            "<d:Bye>"
+                "<a:EndpointReference>"
+                    "<a:Address>urn:uuid:%s</a:Address>"
+                "</a:EndpointReference>"
+            "</d:Bye>"
         "</s:Body>"
         "</s:Envelope>";
-    
+
 #endif /* CONFIG_H */

@@ -91,25 +91,45 @@ static inline int load_config(const char *filename, config *cfg)
         else if(get_the_tag(line, "hostname", cfg->hostname, sizeof(cfg->hostname)));
             
         else if(get_the_tag(line, "FromDHCP", cfg->fromdhcp, sizeof(cfg->fromdhcp))){}
-        
-            
-        else if(get_the_tag(line, "addr", cfg->ip_addr, sizeof(cfg->ip_addr))); 
-            
-        else if(get_the_tag(line, "gateway", cfg->gateway, sizeof(cfg->gateway)));
-            
-        else if(get_the_tag(line, "hwaddress", cfg->hwaddress, sizeof(cfg->hwaddress)));
-            
-        else if(get_the_tag(line, "interface_token", cfg->interface_token, sizeof(cfg->interface_token)));
-            
-        else if (get_the_tag(line, "mtu", buf, sizeof(buf)))
-                cfg->mtu = atoi(buf);
-            
-        else if (get_the_tag(line, "subnet", buf, sizeof(buf)))
-                cfg->prefix_length = atoi(buf);
+
+        else if (get_the_tag(line, "auth", buf, sizeof(buf)))
+            cfg->auth_enabled = atoi(buf);
+
+        else if(get_the_tag(line, "scopes", cfg->scopes, sizeof(cfg->scopes)));
     }
 
     fclose(fp);
     return 1;
+}
+
+// Read serial number from generated cnf file (vtpl_cnf/vsaas_cloud_config.cnf).
+// Returns 1 on success (serial_out filled), 0 on failure (caller should fall back to config.xml).
+static int load_serial_from_cnf(char *serial_out, size_t serial_size) {
+    if (!serial_out || serial_size == 0) return 0;
+    const char *cnf_path = CNF_SERIAL_PATH;
+    FILE *fp = fopen(cnf_path, "r");
+    if (!fp) return 0;
+
+    char line[256];
+    while (fgets(line, sizeof(line), fp)) {
+        const char *prefix = "VTPL_VSAAS_UNIQUE_ID=";
+        char *pos = strstr(line, prefix);
+        if (pos) {
+            pos += strlen(prefix);
+            // Trim trailing newline/whitespace
+            size_t len = strlen(pos);
+            while (len > 0 && (pos[len-1] == '\n' || pos[len-1] == '\r' || pos[len-1] == ' '))
+                len--;
+            if (len == 0) { fclose(fp); return 0; }
+            if (len >= serial_size) len = serial_size - 1;
+            memcpy(serial_out, pos, len);
+            serial_out[len] = '\0';
+            fclose(fp);
+            return 1;
+        }
+    }
+    fclose(fp);
+    return 0;
 }
 
 
@@ -176,7 +196,10 @@ int scan_interfaces(Interfacedata *data, int maxitems/*macro for now*/){
     int count = 0;
     for (ifa = ifaddr; ifa != NULL && count < maxitems; ifa = ifa->ifa_next){
         if(ifa->ifa_addr == NULL) continue;
-        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0) {
+        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0
+            && strncmp(ifa->ifa_name, "docker", 6) != 0
+            && strncmp(ifa->ifa_name, "br-", 3) != 0
+            && strncmp(ifa->ifa_name, "veth", 4) != 0) {
                     strncpy(data[count].name, ifa->ifa_name, 31);
                     
                     struct sockaddr_in *paddr = (struct sockaddr_in *)ifa->ifa_addr;
